@@ -43,19 +43,20 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
                 region = REGIONS[i % 4]
                 df.loc[idx, "region"] = region
 
-        # First Four seeds (6 teams): 4 in bracket + 2 play-in
+        # First Four seeds (6 teams): 2 in bracket + 4 play-in (2 games)
         elif n_expected == 6:
             sort_col = "raw_seed" if "raw_seed" in seed_teams.columns else "selection_prob"
             ascending = True if sort_col == "raw_seed" else False
             seed_teams = seed_teams.sort_values(sort_col, ascending=ascending)
 
             indices = seed_teams.index.tolist()
-            # First 4 go directly to regions
-            for i in range(min(4, len(indices))):
+            # Best 2 go directly to first 2 regions
+            for i in range(min(2, len(indices))):
                 df.loc[indices[i], "region"] = REGIONS[i]
-            # Remaining are First Four play-in games
-            for i in range(4, len(indices)):
-                df.loc[indices[i], "region"] = REGIONS[i - 4]  # paired with same region
+            # Remaining 4 are First Four play-in, paired for the other 2 regions
+            for i in range(2, len(indices)):
+                region_idx = 2 + (i - 2) // 2
+                df.loc[indices[i], "region"] = REGIONS[region_idx]
                 df.loc[indices[i], "first_four"] = True
 
     return df
@@ -88,7 +89,19 @@ def build_matchups(df: pd.DataFrame) -> list[dict]:
             ]
 
             high_name = high.iloc[0]["team"] if not high.empty else "TBD"
-            low_name = low.iloc[0]["team"] if not low.empty else "TBD"
+            if not low.empty:
+                low_name = low.iloc[0]["team"]
+            else:
+                # Slot filled by First Four winner — show both play-in teams
+                ff_in_region = region_teams[
+                    (region_teams["predicted_seed"] == low_seed) &
+                    (region_teams["first_four"])
+                ]
+                if len(ff_in_region) >= 2:
+                    names = ff_in_region["team"].tolist()
+                    low_name = f"{names[0]}/{names[1]}"
+                else:
+                    low_name = "TBD"
 
             matchups.append({
                 "region": region,
