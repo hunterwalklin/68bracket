@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+data/raw/
+data/processed/
+models/saved/
+output/*.md
+.DS_Store
