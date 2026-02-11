@@ -25,29 +25,28 @@ def cmd_scrape(args):
 
     os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-    print("Scraping team stats...")
-    stats_scraper = TeamStatsScraper()
-    team_stats = stats_scraper.scrape_all_seasons(seasons)
-    team_stats.to_parquet(os.path.join(PROCESSED_DIR, "team_stats.parquet"), index=False)
-    print(f"  Saved {len(team_stats)} team-season rows")
+    scrapers = [
+        ("team stats", TeamStatsScraper(), "scrape_all_seasons", seasons, "team_stats.parquet"),
+        ("tournament brackets", TournamentScraper(), "scrape_all_seasons", TRAINING_SEASONS, "tournament.parquet"),
+        ("polls", PollsScraper(), "scrape_all_seasons", seasons, "polls.parquet"),
+        ("conference tournaments", ConferenceScraper(), "scrape_all_seasons", TRAINING_SEASONS, "conferences.parquet"),
+    ]
 
-    print("\nScraping tournament brackets...")
-    tourn_scraper = TournamentScraper()
-    tournament = tourn_scraper.scrape_all_seasons(TRAINING_SEASONS)
-    tournament.to_parquet(os.path.join(PROCESSED_DIR, "tournament.parquet"), index=False)
-    print(f"  Saved {len(tournament)} tournament entries")
-
-    print("\nScraping polls...")
-    polls_scraper = PollsScraper()
-    polls = polls_scraper.scrape_all_seasons(seasons)
-    polls.to_parquet(os.path.join(PROCESSED_DIR, "polls.parquet"), index=False)
-    print(f"  Saved {len(polls)} poll entries")
-
-    print("\nScraping conference tournaments...")
-    conf_scraper = ConferenceScraper()
-    conferences = conf_scraper.scrape_all_seasons(TRAINING_SEASONS)
-    conferences.to_parquet(os.path.join(PROCESSED_DIR, "conferences.parquet"), index=False)
-    print(f"  Saved {len(conferences)} conference entries")
+    for name, scraper, method, szns, filename in scrapers:
+        print(f"\nScraping {name}...")
+        try:
+            df = getattr(scraper, method)(szns)
+            if not df.empty:
+                df.to_parquet(os.path.join(PROCESSED_DIR, filename), index=False)
+                print(f"  Saved {len(df)} rows to {filename}")
+            else:
+                print(f"  Warning: no data collected for {name}")
+        except Exception as e:
+            print(f"  Error scraping {name}: {e}")
+            # Keep any existing parquet file from a previous run
+            existing = os.path.join(PROCESSED_DIR, filename)
+            if os.path.exists(existing):
+                print(f"  Keeping previous {filename}")
 
     print("\nScraping complete!")
 

@@ -54,14 +54,24 @@ class ScraperBase:
             with open(cache_path, "r", encoding="utf-8") as f:
                 return f.read()
 
-        self._rate_limit()
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
+        max_retries = 5
+        for attempt in range(max_retries):
+            self._rate_limit()
+            resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 429:
+                wait = 30 * (2 ** attempt)  # 30s, 60s, 120s, 240s, 480s
+                print(f"  Rate limited (429), waiting {wait}s before retry...")
+                time.sleep(wait)
+                ScraperBase._last_request_time = time.time()
+                continue
+            resp.raise_for_status()
 
-        with open(cache_path, "w", encoding="utf-8") as f:
-            f.write(resp.text)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                f.write(resp.text)
 
-        return resp.text
+            return resp.text
+
+        raise requests.exceptions.HTTPError(f"Still rate limited after {max_retries} retries: {url}")
 
     def parse_html(self, html: str) -> BeautifulSoup:
         """Parse HTML string into BeautifulSoup object."""

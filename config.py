@@ -20,9 +20,9 @@ SR_TOURNAMENT_URL = SR_BASE + "/postseason/{season}-ncaa.html"
 SR_SCHOOL_URL = SR_BASE + "/schools/{school}/{season}-schedule.html"
 
 # Scraping settings
-REQUEST_DELAY = 3.5  # seconds between requests (Sports-Reference rate limit)
+REQUEST_DELAY = 15.0  # seconds between requests (Sports-Reference rate limit)
 REQUEST_TIMEOUT = 30  # seconds
-USER_AGENT = "68bracket/1.0 (NCAA Tournament Prediction Research)"
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 CACHE_EXPIRY_DAYS = 7  # re-scrape after this many days
 
 # Training seasons (skip 2020 due to COVID cancellation)

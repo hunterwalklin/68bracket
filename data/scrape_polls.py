@@ -42,12 +42,9 @@ class PollsScraper(ScraperBase):
 
     def _parse_ap_poll(self, soup, season: int) -> pd.DataFrame:
         """Parse AP poll table."""
-        table = soup.find("table", id="ap-poll")
+        table = soup.find("table", id="ap-polls")
         if table is None:
-            # Try alternative IDs
-            table = soup.find("table", id="polls")
-            if table is None:
-                return pd.DataFrame()
+            return pd.DataFrame()
 
         rows = self.table_to_rows(table)
         if not rows:
@@ -56,63 +53,36 @@ class PollsScraper(ScraperBase):
         df = pd.DataFrame(rows)
         df["season"] = season
 
-        if "school_name" in df.columns:
-            df = df.rename(columns={"school_name": "team"})
+        # SR uses data-stat="school" for team name
+        if "school" in df.columns:
+            df = df.rename(columns={"school": "team"})
             df["team"] = df["team"].str.strip()
 
-        if "school_name_link" in df.columns:
-            df["school_id"] = df["school_name_link"].str.extract(r"/cbb/schools/([^/]+)/")
+        if "school_link" in df.columns:
+            df["school_id"] = df["school_link"].str.extract(r"/cbb/schools/([^/]+)/")
 
-        # Find the final poll rank column (last week's ranking)
-        # SR uses week numbers as column headers
-        rank_cols = [c for c in df.columns if re.match(r"^\d+$", str(c))]
-        if rank_cols:
-            # Final ranking is the last week column
-            final_col = rank_cols[-1]
+        # Week columns are named week1, week2, ... weekN
+        week_cols = [c for c in df.columns if re.match(r"^week\d+$", c)]
+        if week_cols:
+            # Final ranking is the last week column (postseason)
+            final_col = week_cols[-1]
             df["ap_rank"] = pd.to_numeric(df[final_col], errors="coerce")
-        elif "ranker" in df.columns:
-            df["ap_rank"] = pd.to_numeric(df.get("rank", pd.Series()), errors="coerce")
 
-        # Count weeks ranked (number of non-empty week columns)
-        if rank_cols:
-            df["ap_weeks_ranked"] = df[rank_cols].apply(
+            # Count weeks ranked
+            df["ap_weeks_ranked"] = df[week_cols].apply(
                 lambda row: sum(1 for v in row if str(v).strip() and str(v).strip() != "—"),
                 axis=1
             )
         else:
+            df["ap_rank"] = pd.NA
             df["ap_weeks_ranked"] = 0
 
         keep_cols = ["team", "school_id", "season", "ap_rank", "ap_weeks_ranked"]
         return df[[c for c in keep_cols if c in df.columns]]
 
     def _parse_coaches_poll(self, soup, season: int) -> pd.DataFrame:
-        """Parse Coaches poll table."""
-        table = soup.find("table", id="coaches-poll")
-        if table is None:
-            return pd.DataFrame()
-
-        rows = self.table_to_rows(table)
-        if not rows:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(rows)
-        df["season"] = season
-
-        if "school_name" in df.columns:
-            df = df.rename(columns={"school_name": "team"})
-            df["team"] = df["team"].str.strip()
-
-        if "school_name_link" in df.columns:
-            df["school_id"] = df["school_name_link"].str.extract(r"/cbb/schools/([^/]+)/")
-
-        # Get final ranking
-        rank_cols = [c for c in df.columns if re.match(r"^\d+$", str(c))]
-        if rank_cols:
-            final_col = rank_cols[-1]
-            df["coaches_rank"] = pd.to_numeric(df[final_col], errors="coerce")
-
-        keep_cols = ["team", "school_id", "season", "coaches_rank"]
-        return df[[c for c in keep_cols if c in df.columns]]
+        """Parse Coaches poll table. Not available on polls page — return empty."""
+        return pd.DataFrame()
 
     def scrape_all_seasons(self, seasons: list[int] | None = None) -> pd.DataFrame:
         """Scrape poll data for all training seasons."""
@@ -121,9 +91,12 @@ class PollsScraper(ScraperBase):
 
         all_dfs = []
         for season in tqdm(seasons, desc="Scraping polls"):
-            df = self.scrape_polls(season)
-            if not df.empty:
-                all_dfs.append(df)
+            try:
+                df = self.scrape_polls(season)
+                if not df.empty:
+                    all_dfs.append(df)
+            except Exception as e:
+                print(f"\n  Failed season {season}: {e}. Keeping data from other seasons.")
 
         if not all_dfs:
             return pd.DataFrame()

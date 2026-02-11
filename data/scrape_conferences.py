@@ -24,20 +24,18 @@ class ConferenceScraper(ScraperBase):
 
         winners = []
 
-        # Method 1: Look for conference tournament results table
-        table = soup.find("table", id="conf-tourney")
+        # Method 1: Use conference-summary table which has conf_champ_post column
+        table = soup.find("table", id="conference-summary")
         if table:
             rows = self.table_to_rows(table)
             for row in rows:
-                team = row.get("school_name", row.get("winner", "")).strip()
-                conf = row.get("conf_abbr", row.get("conf", "")).strip()
+                team = row.get("conf_champ_post", "").strip()
+                conf = row.get("conf_name", "").strip()
                 school_id = ""
-                for key in ["school_name_link", "winner_link"]:
-                    if key in row:
-                        match = re.search(r"/cbb/schools/([^/]+)/", row[key])
-                        if match:
-                            school_id = match.group(1)
-                            break
+                if "conf_champ_post_link" in row:
+                    match = re.search(r"/cbb/schools/([^/]+)/", row["conf_champ_post_link"])
+                    if match:
+                        school_id = match.group(1)
                 if team:
                     winners.append({
                         "team": team,
@@ -47,12 +45,10 @@ class ConferenceScraper(ScraperBase):
                         "conf_tourney_winner": 1,
                     })
 
-        # Method 2: Parse from conference links on the season page
+        # Method 2: Fallback - parse from conference links on the season page
         if not winners:
             winners = self._parse_from_season_page(soup, season)
 
-        # Method 3: Infer from tournament bracket (teams with seeds 14-16 from
-        # small conferences are likely auto-bid winners)
         if not winners:
             print(f"  Warning: no conference tourney data found for {season}, "
                   "will infer from bracket")
@@ -104,9 +100,12 @@ class ConferenceScraper(ScraperBase):
 
         all_dfs = []
         for season in tqdm(seasons, desc="Scraping conference tournaments"):
-            df = self.scrape_conference_winners(season)
-            if not df.empty:
-                all_dfs.append(df)
+            try:
+                df = self.scrape_conference_winners(season)
+                if not df.empty:
+                    all_dfs.append(df)
+            except Exception as e:
+                print(f"\n  Failed season {season}: {e}. Keeping data from other seasons.")
 
         if not all_dfs:
             return pd.DataFrame()

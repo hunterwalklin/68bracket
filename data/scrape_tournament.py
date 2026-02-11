@@ -134,9 +134,12 @@ class TournamentScraper(ScraperBase):
 
         all_dfs = []
         for season in tqdm(seasons, desc="Scraping tournament brackets"):
-            df = self.scrape_bracket(season)
-            if not df.empty:
-                all_dfs.append(df)
+            try:
+                df = self.scrape_bracket(season)
+                if not df.empty:
+                    all_dfs.append(df)
+            except Exception as e:
+                print(f"\n  Failed season {season}: {e}. Keeping data from other seasons.")
 
         if not all_dfs:
             return pd.DataFrame()
