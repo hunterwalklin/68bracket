@@ -4,4 +4,6 @@ data/raw/
 data/processed/
 models/saved/
 output/*.md
+_site/
+logs/
 .DS_Store

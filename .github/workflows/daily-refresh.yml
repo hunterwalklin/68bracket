@@ -6,6 +6,11 @@ on:
     - cron: "0 11 * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -20,7 +25,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt pyarrow playwright
+          pip install -r requirements.txt
           playwright install chromium
 
       # Cache scraped data and models between runs so we only need
@@ -54,12 +59,21 @@ jobs:
       - name: Train models
         run: python -m main train
 
-      - name: Generate predictions
+      - name: Generate predictions and build site
         run: python -m main predict
 
-      - name: Upload predictions
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: predictions
-          path: data/processed/predictions_*.md
-          retention-days: 30
+          path: _site
+
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

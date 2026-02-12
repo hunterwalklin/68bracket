@@ -211,6 +211,10 @@ def cmd_predict(args):
         f.write(md)
     print(f"\n  Markdown saved to {md_path}")
 
+    # Build site
+    from output.build_site import build as build_site
+    build_site()
+
 
 def cmd_all(args):
     """Run the full pipeline: scrape, build, train, evaluate, predict."""
