@@ -20,34 +20,76 @@ def cmd_scrape(args):
     from data.scrape_torvik import TorvikvScraper
     from data.scrape_conferences import ConferenceScraper
 
-    seasons = TRAINING_SEASONS.copy()
-    if args.include_current:
-        seasons.append(PREDICTION_SEASON)
+    current_only = getattr(args, "current_only", False)
 
     os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-    scrapers = [
-        ("team stats", TeamStatsScraper(), "scrape_all_seasons", seasons, "team_stats.parquet"),
-        ("tournament brackets", TournamentScraper(), "scrape_all_seasons", TRAINING_SEASONS, "tournament.parquet"),
-        ("WarrenNolan rankings", NittyGrittyScraper(), "scrape_all_seasons", seasons, "nitty_gritty.parquet"),
-        ("Torvik ratings", TorvikvScraper(), "scrape_all_seasons", seasons, "torvik.parquet"),
-        ("conference tournaments", ConferenceScraper(), "scrape_all_seasons", TRAINING_SEASONS, "conferences.parquet"),
-    ]
+    if current_only:
+        # Fast path: only re-scrape the current season and upsert into existing data.
+        # Tournament brackets and conference tourneys are historical — skip them.
+        seasons = [PREDICTION_SEASON]
+        scrapers = [
+            ("team stats", TeamStatsScraper(), "scrape_all_seasons", "team_stats.parquet"),
+            ("WarrenNolan rankings", NittyGrittyScraper(), "scrape_all_seasons", "nitty_gritty.parquet"),
+            ("Torvik ratings", TorvikvScraper(), "scrape_all_seasons", "torvik.parquet"),
+        ]
 
-    for name, scraper, method, szns, filename in scrapers:
-        print(f"\nScraping {name}...")
-        try:
-            df = getattr(scraper, method)(szns)
-            if not df.empty:
-                df.to_parquet(os.path.join(PROCESSED_DIR, filename), index=False)
-                print(f"  Saved {len(df)} rows to {filename}")
-            else:
-                print(f"  Warning: no data collected for {name}")
-        except Exception as e:
-            print(f"  Error scraping {name}: {e}")
-            existing = os.path.join(PROCESSED_DIR, filename)
-            if os.path.exists(existing):
-                print(f"  Keeping previous {filename}")
+        print(f"Refreshing current season ({PREDICTION_SEASON}) only...")
+
+        for name, scraper, method, filename in scrapers:
+            print(f"\nScraping {name} ({PREDICTION_SEASON})...")
+            try:
+                scraper.force_refresh = True
+                fresh_df = getattr(scraper, method)(seasons)
+                if fresh_df.empty:
+                    print(f"  Warning: no data collected for {name}")
+                    continue
+
+                # Upsert: load existing, drop current season rows, append fresh
+                path = os.path.join(PROCESSED_DIR, filename)
+                if os.path.exists(path):
+                    existing_df = pd.read_parquet(path)
+                    existing_df = existing_df[existing_df["season"] != PREDICTION_SEASON]
+                    df = pd.concat([existing_df, fresh_df], ignore_index=True)
+                else:
+                    df = fresh_df
+
+                df.to_parquet(path, index=False)
+                print(f"  Saved {len(df)} rows to {filename} "
+                      f"({len(fresh_df)} fresh for {PREDICTION_SEASON})")
+            except Exception as e:
+                print(f"  Error scraping {name}: {e}")
+                existing = os.path.join(PROCESSED_DIR, filename)
+                if os.path.exists(existing):
+                    print(f"  Keeping previous {filename}")
+    else:
+        # Full scrape: all seasons, overwrites parquet files entirely.
+        seasons = TRAINING_SEASONS.copy()
+        if args.include_current:
+            seasons.append(PREDICTION_SEASON)
+
+        scrapers = [
+            ("team stats", TeamStatsScraper(), "scrape_all_seasons", seasons, "team_stats.parquet"),
+            ("tournament brackets", TournamentScraper(), "scrape_all_seasons", TRAINING_SEASONS, "tournament.parquet"),
+            ("WarrenNolan rankings", NittyGrittyScraper(), "scrape_all_seasons", seasons, "nitty_gritty.parquet"),
+            ("Torvik ratings", TorvikvScraper(), "scrape_all_seasons", seasons, "torvik.parquet"),
+            ("conference tournaments", ConferenceScraper(), "scrape_all_seasons", TRAINING_SEASONS, "conferences.parquet"),
+        ]
+
+        for name, scraper, method, szns, filename in scrapers:
+            print(f"\nScraping {name}...")
+            try:
+                df = getattr(scraper, method)(szns)
+                if not df.empty:
+                    df.to_parquet(os.path.join(PROCESSED_DIR, filename), index=False)
+                    print(f"  Saved {len(df)} rows to {filename}")
+                else:
+                    print(f"  Warning: no data collected for {name}")
+            except Exception as e:
+                print(f"  Error scraping {name}: {e}")
+                existing = os.path.join(PROCESSED_DIR, filename)
+                if os.path.exists(existing):
+                    print(f"  Keeping previous {filename}")
 
     print("\nScraping complete!")
 
@@ -229,6 +271,8 @@ Commands:
     scrape_parser = subparsers.add_parser("scrape", help="Scrape data from Sports-Reference")
     scrape_parser.add_argument("--include-current", action="store_true",
                                help="Also scrape the current/prediction season")
+    scrape_parser.add_argument("--current-only", action="store_true",
+                               help="Only re-scrape the current season (fast daily refresh)")
 
     # Build
     subparsers.add_parser("build", help="Build feature matrix")

@@ -20,6 +20,7 @@ class ScraperBase:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
+        self.force_refresh = False
         os.makedirs(RAW_DIR, exist_ok=True)
 
     def _cache_path(self, url: str) -> str:
@@ -50,7 +51,7 @@ class ScraperBase:
         """
         cache_path = self._cache_path(url)
 
-        if not force_refresh and self._is_cache_valid(cache_path):
+        if not (force_refresh or self.force_refresh) and self._is_cache_valid(cache_path):
             with open(cache_path, "r", encoding="utf-8") as f:
                 return f.read()
 

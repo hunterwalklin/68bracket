@@ -189,6 +189,7 @@ class TorvikvScraper:
     """Scrape Bart Torvik data using Playwright for Cloudflare bypass."""
 
     def __init__(self):
+        self.force_refresh = False
         os.makedirs(RAW_DIR, exist_ok=True)
 
     def _cache_path(self, url: str) -> str:
@@ -205,7 +206,7 @@ class TorvikvScraper:
     def _fetch_with_playwright(self, url: str) -> str:
         """Fetch a page using Playwright to bypass Cloudflare."""
         cache = self._cache_path(url)
-        if self._is_cache_valid(cache):
+        if not self.force_refresh and self._is_cache_valid(cache):
             with open(cache, "r", encoding="utf-8") as f:
                 return f.read()
 

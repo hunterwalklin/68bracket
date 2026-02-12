@@ -1,0 +1,65 @@
+name: Daily Refresh
+
+on:
+  schedule:
+    # Run daily at 11:00 UTC (6:00 AM Eastern / 5:00 AM Central)
+    - cron: "0 11 * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyarrow playwright
+          playwright install chromium
+
+      # Cache scraped data and models between runs so we only need
+      # to re-scrape the current season each day.
+      - name: Restore data cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/processed
+            data/raw
+            models/saved
+          key: bracket-data-${{ github.run_number }}
+          restore-keys: bracket-data-
+
+      # First run (no cache): full scrape of all seasons.
+      # Subsequent runs: only re-scrape the current season.
+      - name: Scrape data
+        run: |
+          if [ -f data/processed/team_stats.parquet ]; then
+            echo "Cache hit — running current-only refresh"
+            python -m main scrape --current-only
+          else
+            echo "No cache — running full scrape"
+            python -m main scrape --include-current
+          fi
+
+      - name: Build features
+        run: python -m main build
+
+      - name: Train models
+        run: python -m main train
+
+      - name: Generate predictions
+        run: python -m main predict
+
+      - name: Upload predictions
+        uses: actions/upload-artifact@v4
+        with:
+          name: predictions
+          path: data/processed/predictions_*.md
+          retention-days: 30
