@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 
 from config import (
-    PROCESSED_DIR, POWER_CONFERENCES, ALL_FEATURES,
-    BASIC_STAT_FEATURES, ADVANCED_STAT_FEATURES,
+    PROCESSED_DIR, ALL_FEATURES, COMMITTEE_FEATURES,
     TRAINING_SEASONS, PREDICTION_SEASON,
 )
 from features.team_names import merge_on_team
@@ -33,20 +32,11 @@ def compute_conference_strength(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def add_power_conference_flag(df: pd.DataFrame) -> pd.DataFrame:
-    """Add binary flag for teams in power conferences."""
-    if "conference" not in df.columns:
-        df["power_conf"] = 0
-        return df
-
-    df["power_conf"] = df["conference"].isin(POWER_CONFERENCES).astype(int)
-    return df
-
-
 def build_features(
     team_stats: pd.DataFrame,
     tournament: pd.DataFrame,
-    polls: pd.DataFrame,
+    nitty_gritty: pd.DataFrame,
+    torvik: pd.DataFrame,
     conferences: pd.DataFrame,
 ) -> pd.DataFrame:
     """Merge all data sources and build the full feature matrix.
@@ -54,7 +44,8 @@ def build_features(
     Args:
         team_stats: Basic + advanced stats per team per season
         tournament: Historical bracket data (seeds) - training labels
-        polls: AP and Coaches poll data
+        nitty_gritty: WarrenNolan data (NET ranking, KPI, SOR, BPI, POM rankings)
+        torvik: Bart Torvik data (WAB, Barthag, AdjOE, AdjDE, quadrant records)
         conferences: Conference tournament winners
 
     Returns:
@@ -62,17 +53,22 @@ def build_features(
     """
     df = team_stats.copy()
 
-    # Merge poll data
-    if not polls.empty:
-        df = merge_on_team(df, polls, season_col="season", how="left")
-        # Fill unranked teams
-        df["ap_rank"] = df.get("ap_rank", pd.Series(dtype=float)).fillna(0)
-        df["ap_weeks_ranked"] = df.get("ap_weeks_ranked", pd.Series(dtype=float)).fillna(0)
-        df["coaches_rank"] = df.get("coaches_rank", pd.Series(dtype=float)).fillna(0)
-    else:
-        df["ap_rank"] = 0
-        df["ap_weeks_ranked"] = 0
-        df["coaches_rank"] = 0
+    # Merge WarrenNolan rankings (NET, KPI, SOR, BPI, POM)
+    if not nitty_gritty.empty:
+        df = merge_on_team(df, nitty_gritty, season_col="season", how="left")
+
+    # Merge Torvik data (WAB, Barthag, AdjOE, AdjDE, quadrant records)
+    # Drop overlapping columns from WarrenNolan so Torvik's fuller-coverage data wins
+    if not torvik.empty:
+        overlap_cols = [c for c in torvik.columns
+                        if c in df.columns and c not in ("team", "school_id", "season")]
+        if overlap_cols:
+            df = df.drop(columns=overlap_cols)
+        df = merge_on_team(df, torvik, season_col="season", how="left")
+
+    # Fill missing committee features with 0
+    for feat in COMMITTEE_FEATURES:
+        df[feat] = df.get(feat, pd.Series(dtype=float)).fillna(0.0)
 
     # Merge conference tournament winners
     if not conferences.empty:
@@ -83,7 +79,6 @@ def build_features(
         df["conf_tourney_winner"] = 0
 
     # Add conference features
-    df = add_power_conference_flag(df)
     df = compute_conference_strength(df)
 
     # Add tournament labels (target variables)

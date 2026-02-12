@@ -181,8 +181,13 @@ def display_selection_summary(df: pd.DataFrame):
 
 def generate_markdown(df: pd.DataFrame, season: int = PREDICTION_SEASON) -> str:
     """Generate a markdown representation of the bracket."""
+    from datetime import datetime, timezone, timedelta
+    cst = timezone(timedelta(hours=-6))
+    timestamp = datetime.now(cst).strftime("%B %d, %Y at %I:%M %p CST")
     lines = [
         f"# NCAA Tournament Predictions - {season-1}-{str(season)[2:]}",
+        "",
+        f"*Last updated: {timestamp}*",
         "",
         "## Seed List",
         "",

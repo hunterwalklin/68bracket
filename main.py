@@ -16,7 +16,8 @@ def cmd_scrape(args):
     """Scrape all data sources."""
     from data.scrape_team_stats import TeamStatsScraper
     from data.scrape_tournament import TournamentScraper
-    from data.scrape_polls import PollsScraper
+    from data.scrape_nitty_gritty import NittyGrittyScraper
+    from data.scrape_torvik import TorvikvScraper
     from data.scrape_conferences import ConferenceScraper
 
     seasons = TRAINING_SEASONS.copy()
@@ -28,7 +29,8 @@ def cmd_scrape(args):
     scrapers = [
         ("team stats", TeamStatsScraper(), "scrape_all_seasons", seasons, "team_stats.parquet"),
         ("tournament brackets", TournamentScraper(), "scrape_all_seasons", TRAINING_SEASONS, "tournament.parquet"),
-        ("polls", PollsScraper(), "scrape_all_seasons", seasons, "polls.parquet"),
+        ("WarrenNolan rankings", NittyGrittyScraper(), "scrape_all_seasons", seasons, "nitty_gritty.parquet"),
+        ("Torvik ratings", TorvikvScraper(), "scrape_all_seasons", seasons, "torvik.parquet"),
         ("conference tournaments", ConferenceScraper(), "scrape_all_seasons", TRAINING_SEASONS, "conferences.parquet"),
     ]
 
@@ -43,7 +45,6 @@ def cmd_scrape(args):
                 print(f"  Warning: no data collected for {name}")
         except Exception as e:
             print(f"  Error scraping {name}: {e}")
-            # Keep any existing parquet file from a previous run
             existing = os.path.join(PROCESSED_DIR, filename)
             if os.path.exists(existing):
                 print(f"  Keeping previous {filename}")
@@ -58,11 +59,12 @@ def cmd_build(args):
     print("Loading scraped data...")
     team_stats = _load_parquet("team_stats.parquet")
     tournament = _load_parquet("tournament.parquet")
-    polls = _load_parquet("polls.parquet")
+    nitty_gritty = _load_parquet("nitty_gritty.parquet")
+    torvik = _load_parquet("torvik.parquet")
     conferences = _load_parquet("conferences.parquet")
 
     print("Building features...")
-    df = build_features(team_stats, tournament, polls, conferences)
+    df = build_features(team_stats, tournament, nitty_gritty, torvik, conferences)
     save_features(df)
 
     # Print summary

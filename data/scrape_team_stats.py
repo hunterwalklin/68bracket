@@ -38,10 +38,8 @@ class TeamStatsScraper(ScraperBase):
             "win_loss_pct": "win_pct",
             "srs": "srs",
             "sos": "sos",
-            "conf_wins": "conf_wins",
-            "conf_losses": "conf_losses",
-            "pts_per_g": "pts_per_game",
-            "opp_pts_per_g": "opp_pts_per_game",
+            "wins_conf": "conf_wins",
+            "losses_conf": "conf_losses",
         }
 
         # Only rename columns that exist
@@ -59,10 +57,16 @@ class TeamStatsScraper(ScraperBase):
 
         # Convert numeric columns
         numeric_cols = ["wins", "losses", "win_pct", "srs", "sos",
-                        "conf_wins", "conf_losses", "pts_per_game", "opp_pts_per_game"]
+                        "conf_wins", "conf_losses", "g", "pts", "opp_pts"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Compute per-game stats from totals
+        if "pts" in df.columns and "g" in df.columns:
+            df["pts_per_game"] = (df["pts"] / df["g"]).round(1)
+        if "opp_pts" in df.columns and "g" in df.columns:
+            df["opp_pts_per_game"] = (df["opp_pts"] / df["g"]).round(1)
 
         # Compute conf_win_pct
         if "conf_wins" in df.columns and "conf_losses" in df.columns:
@@ -96,15 +100,10 @@ class TeamStatsScraper(ScraperBase):
             "school_name": "team",
             "pace": "pace",
             "off_rtg": "ortg",
-            "def_rtg": "drtg",
             "efg_pct": "efg_pct",
             "tov_pct": "tov_pct",
             "orb_pct": "orb_pct",
             "ft_rate": "ft_rate",
-            "opp_efg_pct": "opp_efg_pct",
-            "opp_tov_pct": "opp_tov_pct",
-            "opp_orb_pct": "opp_orb_pct",
-            "opp_ft_rate": "opp_ft_rate",
         }
 
         existing_renames = {k: v for k, v in rename_map.items() if k in df.columns}
@@ -118,15 +117,10 @@ class TeamStatsScraper(ScraperBase):
             df["school_id"] = df["school_name_link"].str.extract(r"/cbb/schools/([^/]+)/")
 
         # Convert numeric columns
-        numeric_cols = ["pace", "ortg", "drtg", "efg_pct", "tov_pct", "orb_pct",
-                        "ft_rate", "opp_efg_pct", "opp_tov_pct", "opp_orb_pct", "opp_ft_rate"]
+        numeric_cols = ["pace", "ortg", "efg_pct", "tov_pct", "orb_pct", "ft_rate"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-
-        # Compute net rating
-        if "ortg" in df.columns and "drtg" in df.columns:
-            df["nrtg"] = df["ortg"] - df["drtg"]
 
         df = df.dropna(subset=["team"]).query("team != ''")
         return df
@@ -149,17 +143,26 @@ class TeamStatsScraper(ScraperBase):
         df = pd.DataFrame(rows)
         df["season"] = season
 
-        if "school_name" in df.columns:
-            df = df.rename(columns={"school_name": "team"})
+        rename_map = {
+            "school_name": "team",
+            "conf_abbr": "conference",
+            "def_rtg": "drtg",
+            "net_rtg": "nrtg",
+        }
+        existing_renames = {k: v for k, v in rename_map.items() if k in df.columns}
+        df = df.rename(columns=existing_renames)
+
+        if "team" in df.columns:
             df["team"] = df["team"].str.replace(r"\s*NCAA$", "", regex=True)
             df["team"] = df["team"].str.strip()
 
         if "school_name_link" in df.columns:
             df["school_id"] = df["school_name_link"].str.extract(r"/cbb/schools/([^/]+)/")
 
-        # Extract conference if present
-        if "conf_abbr" in df.columns:
-            df = df.rename(columns={"conf_abbr": "conference"})
+        # Convert numeric columns
+        for col in ["drtg", "nrtg"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
         df = df.dropna(subset=["team"]).query("team != ''")
         return df

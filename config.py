@@ -8,16 +8,17 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 RAW_DIR = os.path.join(DATA_DIR, "raw")
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models", "saved")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 
 # Sports-Reference base URLs
 SR_BASE = "https://www.sports-reference.com/cbb"
 SR_SEASONS_URL = SR_BASE + "/seasons/{season}-school-stats.html"
 SR_ADVANCED_URL = SR_BASE + "/seasons/{season}-advanced-school-stats.html"
 SR_RATINGS_URL = SR_BASE + "/seasons/{season}-ratings.html"
-SR_POLLS_URL = SR_BASE + "/seasons/{season}-polls.html"
 SR_TOURNAMENT_URL = SR_BASE + "/postseason/{season}-ncaa.html"
-SR_SCHOOL_URL = SR_BASE + "/schools/{school}/{season}-schedule.html"
+
+# WarrenNolan URLs
+WARRENNOLAN_NITTY_URL = "https://www.warrennolan.com/basketball/{year}/net-nitty"
+WARRENNOLAN_COMPARE_URL = "https://www.warrennolan.com/basketball/{year}/compare-rankings"
 
 # Scraping settings
 REQUEST_DELAY = 15.0  # seconds between requests (Sports-Reference rate limit)
@@ -25,8 +26,8 @@ REQUEST_TIMEOUT = 30  # seconds
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 CACHE_EXPIRY_DAYS = 7  # re-scrape after this many days
 
-# Training seasons (skip 2020 due to COVID cancellation)
-TRAINING_SEASONS = [2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023, 2024, 2025]
+# Training seasons (NET era only, skip 2020 due to COVID cancellation)
+TRAINING_SEASONS = [2019, 2021, 2022, 2023, 2024, 2025]
 PREDICTION_SEASON = 2026
 
 # Tournament structure
@@ -37,41 +38,30 @@ TEAMS_PER_SEED[11] = 6  # First Four at-large
 TEAMS_PER_SEED[16] = 6  # First Four auto-bid
 REGIONS = ["East", "West", "South", "Midwest"]
 
-# Power conferences (current era)
-POWER_CONFERENCES = [
-    "ACC", "Big 12", "Big East", "Big Ten", "SEC",
-]
-
-# All D1 conferences (2024-25 alignment, 32 conferences + independents)
-ALL_CONFERENCES = [
-    "ACC", "American", "A-10", "A-Sun", "Big 12", "Big East", "Big Sky",
-    "Big South", "Big Ten", "Big West", "CAA", "CUSA", "Horizon",
-    "Ivy", "MAAC", "MAC", "MEAC", "MVC", "MWC", "NEC", "OVC",
-    "Pac-12", "Patriot", "SEC", "SBC", "Southern", "Southland",
-    "Summit", "SWAC", "WAC", "WCC",
-]
-
 # Features used in modeling
 BASIC_STAT_FEATURES = [
     "wins", "losses", "win_pct",
     "conf_wins", "conf_losses", "conf_win_pct",
-    "srs", "sos",
-    "pts_per_game", "opp_pts_per_game",
+    "srs",
 ]
 
 ADVANCED_STAT_FEATURES = [
-    "pace", "ortg", "drtg", "nrtg",
-    "efg_pct", "tov_pct", "orb_pct", "ft_rate",
-    "opp_efg_pct", "opp_tov_pct", "opp_orb_pct", "opp_ft_rate",
+    "drtg", "nrtg",
 ]
 
-RATING_FEATURES = [
-    "ap_rank", "ap_weeks_ranked",
-    "coaches_rank",
+COMMITTEE_FEATURES = [
+    # Results-based rankings (WarrenNolan)
+    "net_ranking", "net_sos",
+    "kpi", "sor",
+    # Predictive rankings (WarrenNolan)
+    "bpi", "pom",
+    # Torvik metrics (actual values)
+    "wab", "barthag", "adj_oe", "adj_de",
+    # Top quadrant records (Torvik)
+    "q1_wins",
 ]
 
 CONFERENCE_FEATURES = [
-    "power_conf",
     "conf_strength",
     "conf_tourney_winner",
 ]
@@ -79,7 +69,7 @@ CONFERENCE_FEATURES = [
 ALL_FEATURES = (
     BASIC_STAT_FEATURES
     + ADVANCED_STAT_FEATURES
-    + RATING_FEATURES
+    + COMMITTEE_FEATURES
     + CONFERENCE_FEATURES
 )
 
