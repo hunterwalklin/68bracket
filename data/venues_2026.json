@@ -1,0 +1,24 @@
+{
+  "first_second": [
+    {"city": "Dayton, OH", "region": null, "lat": 39.76, "lon": -84.19, "note": "First Four"},
+    {"city": "Pittsburgh, PA", "region": "East", "lat": 40.44, "lon": -79.99},
+    {"city": "Newark, NJ", "region": "East", "lat": 40.73, "lon": -74.17},
+    {"city": "Charlotte, NC", "region": "South", "lat": 35.23, "lon": -80.84},
+    {"city": "Raleigh, NC", "region": "South", "lat": 35.77, "lon": -78.64},
+    {"city": "Indianapolis, IN", "region": "Midwest", "lat": 39.77, "lon": -86.16},
+    {"city": "Cleveland, OH", "region": "Midwest", "lat": 41.50, "lon": -81.69},
+    {"city": "Denver, CO", "region": "West", "lat": 39.74, "lon": -104.99},
+    {"city": "Salt Lake City, UT", "region": "West", "lat": 40.76, "lon": -111.89}
+  ],
+  "regionals": [
+    {"city": "Newark, NJ", "region": "East", "lat": 40.73, "lon": -74.17},
+    {"city": "Atlanta, GA", "region": "South", "lat": 33.76, "lon": -84.39},
+    {"city": "Indianapolis, IN", "region": "Midwest", "lat": 39.77, "lon": -86.16},
+    {"city": "San Francisco, CA", "region": "West", "lat": 37.77, "lon": -122.42}
+  ],
+  "final_four": {
+    "city": "San Antonio, TX",
+    "lat": 29.42,
+    "lon": -98.49
+  }
+}

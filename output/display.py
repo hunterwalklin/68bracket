@@ -179,7 +179,11 @@ def display_selection_summary(df: pd.DataFrame):
                 print(f"    {conf} ({count}): {', '.join(teams)}")
 
 
-def generate_markdown(df: pd.DataFrame, season: int = PREDICTION_SEASON) -> str:
+def generate_markdown(
+    df: pd.DataFrame,
+    season: int = PREDICTION_SEASON,
+    bubble: dict | None = None,
+) -> str:
     """Generate a markdown representation of the bracket."""
     from datetime import datetime, timezone, timedelta
     cst = timezone(timedelta(hours=-6))
@@ -208,6 +212,16 @@ def generate_markdown(df: pd.DataFrame, season: int = PREDICTION_SEASON) -> str:
         lines.append(f"| {seed} | {', '.join(teams)} |")
 
     lines.extend(["", "*First Four play-in game", ""])
+
+    # Bubble
+    if bubble:
+        lines.extend(["## Bubble Watch", ""])
+        lines.append(f"**Last 4 In:** {', '.join(bubble['last_4_in'])}")
+        lines.append("")
+        lines.append(f"**First 4 Out:** {', '.join(bubble['first_4_out'])}")
+        lines.append("")
+        lines.append(f"**Next 4 Out:** {', '.join(bubble['next_4_out'])}")
+        lines.append("")
 
     # First Four
     ff_games = build_first_four(df)

@@ -1,66 +1,351 @@
-"""Build bracket structure: assign regions, format matchups."""
+"""Build bracket structure: assign regions, format matchups.
+
+Implements NCAA bracket placement rules:
+1. S-curve ordering across 4 regions
+2. Conference separation at seeds 1-4 (hard constraint)
+3. Conference meeting avoidance at seeds 5+ (soft constraint)
+4. Geographic proximity optimization (soft constraint)
+5. First Four pairing
+"""
+
+import json
+import math
+from collections import Counter, defaultdict
+from itertools import permutations
 
 import numpy as np
 import pandas as pd
 
-from config import REGIONS, SEEDS, TEAMS_PER_SEED
+from config import REGIONS, SEEDS, TEAMS_PER_SEED, QUADRANTS, TEAM_LOCATIONS_PATH, VENUES_PATH
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _haversine(lat1, lon1, lat2, lon2):
+    """Great-circle distance in miles between two lat/lon points."""
+    R = 3959  # Earth radius in miles
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _load_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _build_s_curve(seed_line):
+    """Return region indices [0-3] for a seed line following S-curve.
+
+    Odd seeds: forward [0,1,2,3]
+    Even seeds: reversed [3,2,1,0]
+    """
+    if seed_line % 2 == 1:
+        return [0, 1, 2, 3]
+    return [3, 2, 1, 0]
+
+
+# Pre-compute which seeds belong to which bracket half.
+# Top half: quadrants A + B, bottom half: quadrants C + D.
+_TOP_HALF_SEEDS = set()
+_BOTTOM_HALF_SEEDS = set()
+for _q in ("A", "B"):
+    _TOP_HALF_SEEDS.update(QUADRANTS[_q])
+for _q in ("C", "D"):
+    _BOTTOM_HALF_SEEDS.update(QUADRANTS[_q])
+
+
+def _get_half(seed):
+    """Return 'top' or 'bottom' bracket half for a seed number."""
+    if seed in _TOP_HALF_SEEDS:
+        return "top"
+    if seed in _BOTTOM_HALF_SEEDS:
+        return "bottom"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Conference separation (seeds 1-4, hard constraint)
+# ---------------------------------------------------------------------------
+
+def _enforce_conference_separation(slots):
+    """Ensure no two teams from the same conference share a region at seeds 1-4.
+
+    Processes seed lines in order (1→4). For each, tries all 24 region
+    permutations and picks the one with zero conflicts and minimal S-curve
+    disruption.
+    """
+    for seed in range(1, 5):
+        seed_slots = [s for s in slots if s["seed"] == seed]
+        if len(seed_slots) != 4:
+            continue
+
+        # Conferences already placed at earlier seed lines, per region
+        region_confs = {r: set() for r in range(4)}
+        for s in slots:
+            if s["seed"] < seed:
+                region_confs[s["region"]].add(s["conf"])
+
+        def count_conflicts(region_assignment):
+            n = 0
+            for i, s in enumerate(seed_slots):
+                if s["conf"] in region_confs[region_assignment[i]]:
+                    n += 1
+            return n
+
+        current = [s["region"] for s in seed_slots]
+        if count_conflicts(current) == 0:
+            continue
+
+        s_curve = _build_s_curve(seed)
+        best = current
+        best_c = count_conflicts(current)
+        best_dist = sum(1 for a, b in zip(current, s_curve) if a != b)
+
+        for perm in permutations(range(4)):
+            perm = list(perm)
+            c = count_conflicts(perm)
+            dist = sum(1 for a, b in zip(perm, s_curve) if a != b)
+            if c < best_c or (c == best_c and dist < best_dist):
+                best = perm
+                best_c = c
+                best_dist = dist
+
+        for i, s in enumerate(seed_slots):
+            s["region"] = best[i]
+
+
+# ---------------------------------------------------------------------------
+# Conference meeting avoidance (seeds 5-16, soft constraint)
+# ---------------------------------------------------------------------------
+
+def _count_half_conflicts(slots):
+    """Count same-conference teams placed in the same bracket half of the
+    same region. These teams could meet before the regional final."""
+    groups = defaultdict(list)
+    for s in slots:
+        h = _get_half(s["seed"])
+        if h:
+            groups[(s["region"], h)].append(s["conf"])
+
+    conflicts = 0
+    for confs in groups.values():
+        for _, n in Counter(confs).items():
+            if n > 1:
+                conflicts += n - 1
+    return conflicts
+
+
+def _reduce_conference_meetings(slots):
+    """For seeds 5-16, try region permutations to minimize same-conference
+    matchups before the regional final (same bracket half of same region)."""
+    for seed in range(5, 17):
+        seed_slots = [s for s in slots if s["seed"] == seed]
+        if len(seed_slots) != 4:
+            continue
+
+        s_curve = _build_s_curve(seed)
+        best = [s["region"] for s in seed_slots]
+        best_c = None
+        best_dist = None
+
+        for perm in permutations(range(4)):
+            perm = list(perm)
+            # Temporarily apply this permutation
+            for i, s in enumerate(seed_slots):
+                s["region"] = perm[i]
+
+            c = _count_half_conflicts(slots)
+            dist = sum(1 for a, b in zip(perm, s_curve) if a != b)
+
+            if best_c is None or c < best_c or (c == best_c and dist < best_dist):
+                best = list(perm)
+                best_c = c
+                best_dist = dist
+
+        # Apply best permanently
+        for i, s in enumerate(seed_slots):
+            s["region"] = best[i]
+
+
+# ---------------------------------------------------------------------------
+# Geographic proximity (optional soft constraint)
+# ---------------------------------------------------------------------------
+
+def _optimize_geography(slots):
+    """Within each seed line, swap teams between regions to reduce travel
+    distance to first/second-round venues, without violating conference
+    separation at seeds 1-4."""
+    team_locs = _load_json(TEAM_LOCATIONS_PATH)
+    venues = _load_json(VENUES_PATH)
+
+    if not team_locs or not venues:
+        return
+
+    first_second = venues.get("first_second", [])
+    if not first_second:
+        return
+
+    def venue_dist(team_name, region_idx):
+        """Min distance from team to any R1/R2 venue in that region."""
+        loc = team_locs.get(team_name)
+        if not loc:
+            return 0.0
+        region_name = REGIONS[region_idx]
+        min_d = float("inf")
+        for v in first_second:
+            if v.get("region") == region_name:
+                d = _haversine(loc["lat"], loc["lon"], v["lat"], v["lon"])
+                min_d = min(min_d, d)
+        return min_d if min_d < float("inf") else 0.0
+
+    def swap_preserves_conf_separation(slot_a, slot_b):
+        """Return True if swapping two slots' regions keeps seeds 1-4 clean."""
+        if slot_a["seed"] > 4 and slot_b["seed"] > 4:
+            return True  # only seeds 1-4 have hard constraint
+        region_confs = {r: set() for r in range(4)}
+        for s in slots:
+            if s["seed"] <= 4 and s is not slot_a and s is not slot_b:
+                region_confs[s["region"]].add(s["conf"])
+        new_r_a, new_r_b = slot_b["region"], slot_a["region"]
+        if slot_a["seed"] <= 4 and slot_a["conf"] in region_confs[new_r_a]:
+            return False
+        if slot_b["seed"] <= 4 and slot_b["conf"] in region_confs[new_r_b]:
+            return False
+        return True
+
+    for seed in SEEDS:
+        seed_slots = [s for s in slots if s["seed"] == seed]
+        if len(seed_slots) < 2:
+            continue
+
+        improved = True
+        while improved:
+            improved = False
+            for i in range(len(seed_slots)):
+                for j in range(i + 1, len(seed_slots)):
+                    a, b = seed_slots[i], seed_slots[j]
+                    if a["region"] == b["region"]:
+                        continue
+
+                    cur = venue_dist(a["team"], a["region"]) + venue_dist(b["team"], b["region"])
+                    swp = venue_dist(a["team"], b["region"]) + venue_dist(b["team"], a["region"])
+
+                    if swp < cur and swap_preserves_conf_separation(a, b):
+                        a["region"], b["region"] = b["region"], a["region"]
+                        improved = True
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
-    """Assign the 68 teams to 4 regions.
-
-    Rules:
-    - Each region gets one team per seed line (1-16)
-    - First Four teams (extra at seeds 11 and 16) are placed as play-in games
-    - Top 4 overall seeds go to different regions as 1-seeds
+    """Assign the 68 teams to 4 regions using NCAA bracket placement rules.
 
     Args:
-        df: DataFrame with predicted_seed column, sorted by raw_seed
+        df: DataFrame with predicted_seed and raw_seed columns, plus
+            conference and team columns.
 
     Returns:
-        DataFrame with 'region' column added
+        DataFrame with 'region' and 'first_four' columns added.
     """
     df = df.copy()
     df["region"] = ""
     df["first_four"] = False
 
-    # Group by predicted seed
+    sort_col = "raw_seed" if "raw_seed" in df.columns else "selection_prob"
+    ascending = sort_col == "raw_seed"
+
+    # ------------------------------------------------------------------
+    # Step 1: Identify First Four teams
+    #   Seed 11: last 4 at-large → First Four
+    #   Seed 16: last 4 auto-bids → First Four
+    #   Within each FF seed, the 2 best (by raw_seed) go direct, rest are FF.
+    # ------------------------------------------------------------------
+    for ff_seed in (11, 16):
+        seed_teams = df[df["predicted_seed"] == ff_seed].sort_values(
+            sort_col, ascending=ascending,
+        )
+        if len(seed_teams) > 4:
+            for idx in seed_teams.index[2:]:
+                df.loc[idx, "first_four"] = True
+
+    # ------------------------------------------------------------------
+    # Step 2: Build S-curve slot list for the 64 direct-placement teams
+    # ------------------------------------------------------------------
+    slots = []
     for seed in SEEDS:
-        seed_teams = df[df["predicted_seed"] == seed].copy()
-        n_expected = TEAMS_PER_SEED[seed]
+        direct = df[(df["predicted_seed"] == seed) & (~df["first_four"])]
+        direct = direct.sort_values(sort_col, ascending=ascending)
 
-        if len(seed_teams) == 0:
-            continue
+        n = min(4, len(direct))
+        s_curve = _build_s_curve(seed)[:n]
 
-        # Standard seeds (4 teams): one per region
-        if n_expected == 4:
-            # Sort by raw_seed or selection_prob for within-seed ordering
-            sort_col = "raw_seed" if "raw_seed" in seed_teams.columns else "selection_prob"
-            ascending = True if sort_col == "raw_seed" else False
-            seed_teams = seed_teams.sort_values(sort_col, ascending=ascending)
+        for i, (idx, row) in enumerate(direct.head(n).iterrows()):
+            slots.append({
+                "idx": idx,
+                "seed": seed,
+                "conf": row.get("conference", ""),
+                "region": s_curve[i],
+                "team": row["team"],
+            })
 
-            for i, (idx, _) in enumerate(seed_teams.iterrows()):
-                region = REGIONS[i % 4]
-                df.loc[idx, "region"] = region
+    # ------------------------------------------------------------------
+    # Step 3: Conference separation at seeds 1-4 (hard)
+    # ------------------------------------------------------------------
+    _enforce_conference_separation(slots)
 
-        # First Four seeds (6 teams): 2 in bracket + 4 play-in (2 games)
-        elif n_expected == 6:
-            sort_col = "raw_seed" if "raw_seed" in seed_teams.columns else "selection_prob"
-            ascending = True if sort_col == "raw_seed" else False
-            seed_teams = seed_teams.sort_values(sort_col, ascending=ascending)
+    # ------------------------------------------------------------------
+    # Step 4: Conference meeting avoidance at seeds 5-16 (soft)
+    # ------------------------------------------------------------------
+    _reduce_conference_meetings(slots)
 
-            indices = seed_teams.index.tolist()
-            # Best 2 go directly to first 2 regions
-            for i in range(min(2, len(indices))):
-                df.loc[indices[i], "region"] = REGIONS[i]
-            # Remaining 4 are First Four play-in, paired for the other 2 regions
-            for i in range(2, len(indices)):
-                region_idx = 2 + (i - 2) // 2
-                df.loc[indices[i], "region"] = REGIONS[region_idx]
-                df.loc[indices[i], "first_four"] = True
+    # ------------------------------------------------------------------
+    # Step 5: Geographic optimization (soft)
+    # ------------------------------------------------------------------
+    _optimize_geography(slots)
+
+    # ------------------------------------------------------------------
+    # Step 6: Apply region assignments for direct teams
+    # ------------------------------------------------------------------
+    for s in slots:
+        df.loc[s["idx"], "region"] = REGIONS[s["region"]]
+
+    # ------------------------------------------------------------------
+    # Step 7: Assign First Four teams to their regions
+    #   Each FF seed has 2 direct teams occupying 2 regions.
+    #   The 4 FF teams form 2 games, each playing into one of the
+    #   remaining 2 region slots.
+    # ------------------------------------------------------------------
+    for ff_seed in (11, 16):
+        ff_teams = df[
+            (df["predicted_seed"] == ff_seed) & (df["first_four"])
+        ].sort_values(sort_col, ascending=ascending)
+
+        direct_regions = {
+            s["region"] for s in slots if s["seed"] == ff_seed
+        }
+        empty_regions = [r for r in range(4) if r not in direct_regions]
+
+        for i, (idx, _) in enumerate(ff_teams.iterrows()):
+            region_idx = empty_regions[i // 2] if i // 2 < len(empty_regions) else i % 4
+            df.loc[idx, "region"] = REGIONS[region_idx]
 
     return df
 
+
+# ---------------------------------------------------------------------------
+# Matchup builders (unchanged)
+# ---------------------------------------------------------------------------
 
 def build_matchups(df: pd.DataFrame) -> list[dict]:
     """Build first-round matchups from seeded bracket.

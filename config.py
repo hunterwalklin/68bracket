@@ -37,6 +37,16 @@ TEAMS_PER_SEED = {s: 4 for s in SEEDS}
 TEAMS_PER_SEED[11] = 6  # First Four at-large
 TEAMS_PER_SEED[16] = 6  # First Four auto-bid
 REGIONS = ["East", "West", "South", "Midwest"]
+TEAM_LOCATIONS_PATH = os.path.join(DATA_DIR, "team_locations.json")
+VENUES_PATH = os.path.join(DATA_DIR, "venues_2026.json")
+
+# S-curve quadrants (matchup pairs within a region)
+QUADRANTS = {
+    "A": [1, 16, 8, 9],
+    "B": [4, 13, 5, 12],
+    "C": [2, 15, 7, 10],
+    "D": [3, 14, 6, 11],
+}
 
 # Features used in modeling
 BASIC_STAT_FEATURES = [

@@ -191,8 +191,31 @@ def cmd_predict(args):
     field = sel_model.select_field(pred_df)
     print(f"  Selected {len(field)} teams")
 
+    # Compute bubble: last 4 in, first 4 out, next 4 out
+    at_large = field[field["selection_method"] == "at_large"].sort_values("selection_prob")
+    last_4_in = at_large.head(4)[["team", "selection_prob"]].values.tolist()
+
+    selected_ids = set(field["school_id"])
+    all_with_probs = pred_df.copy()
+    all_with_probs["selection_prob"] = sel_model.predict_proba(pred_df)
+    not_selected = all_with_probs[~all_with_probs["school_id"].isin(selected_ids)]
+    not_selected = not_selected.sort_values("selection_prob", ascending=False)
+    first_4_out = not_selected.head(4)[["team", "selection_prob"]].values.tolist()
+    next_4_out = not_selected.iloc[4:8][["team", "selection_prob"]].values.tolist()
+
+    bubble = {
+        "last_4_in": [t for t, _ in last_4_in],
+        "first_4_out": [t for t, _ in first_4_out],
+        "next_4_out": [t for t, _ in next_4_out],
+    }
+
+    print(f"\n  Bubble:")
+    print(f"    Last 4 In:    {', '.join(bubble['last_4_in'])}")
+    print(f"    First 4 Out:  {', '.join(bubble['first_4_out'])}")
+    print(f"    Next 4 Out:   {', '.join(bubble['next_4_out'])}")
+
     # Stage 2: Assign seeds
-    print("Stage 2: Assigning seeds...")
+    print("\nStage 2: Assigning seeds...")
     seeded = seed_model.assign_seeds(field)
 
     # Assign regions
@@ -205,15 +228,75 @@ def cmd_predict(args):
     display_bracket(bracket, season=season)
 
     # Save markdown output
-    md = generate_markdown(bracket, season=season)
+    md = generate_markdown(bracket, season=season, bubble=bubble)
     md_path = os.path.join(PROCESSED_DIR, f"predictions_{season}.md")
     with open(md_path, "w") as f:
         f.write(md)
     print(f"\n  Markdown saved to {md_path}")
 
+    # Compute day-over-day changes for teams that played
+    import json
+    snapshot_path = os.path.join(PROCESSED_DIR, "daily_snapshot.json")
+    changes = {}  # team_name -> {"direction": "up"|"down", "prev_seed": N, "new_seed": N}
+
+    # Load yesterday's snapshot
+    prev_snapshot = {}
+    if os.path.exists(snapshot_path):
+        with open(snapshot_path, "r") as f:
+            prev_snapshot = json.load(f).get("teams", {})
+
+    # Build today's snapshot and compute diffs
+    today_snapshot = {}
+    seeded_teams = bracket.dropna(subset=["predicted_seed"])
+    for _, row in seeded_teams.iterrows():
+        sid = row.get("school_id", "")
+        team_name = row["team"]
+        seed = int(row["predicted_seed"])
+        wins = int(row.get("wins", 0))
+        losses = int(row.get("losses", 0))
+        today_snapshot[sid] = {
+            "team": team_name, "seed": seed,
+            "wins": wins, "losses": losses,
+        }
+
+        # Compare with yesterday
+        if sid in prev_snapshot:
+            prev = prev_snapshot[sid]
+            prev_games = prev["wins"] + prev["losses"]
+            curr_games = wins + losses
+            if curr_games > prev_games:
+                # Team played — check seed movement
+                prev_seed = prev["seed"]
+                if seed < prev_seed:
+                    changes[team_name] = {
+                        "direction": "up", "prev_seed": prev_seed, "new_seed": seed,
+                    }
+                elif seed > prev_seed:
+                    changes[team_name] = {
+                        "direction": "down", "prev_seed": prev_seed, "new_seed": seed,
+                    }
+        elif sid not in prev_snapshot and prev_snapshot:
+            # Newly added to field after playing
+            record_in_features = pred_df[pred_df["school_id"] == sid]
+            if not record_in_features.empty:
+                changes[team_name] = {
+                    "direction": "up", "prev_seed": None, "new_seed": seed,
+                }
+
+    # Save today's snapshot for tomorrow
+    with open(snapshot_path, "w") as f:
+        json.dump({"date": str(pd.Timestamp.now().date()), "teams": today_snapshot}, f)
+
+    if changes:
+        print(f"\n  {len(changes)} teams moved after playing:")
+        for name, c in sorted(changes.items(), key=lambda x: x[1]["new_seed"]):
+            arrow = "^" if c["direction"] == "up" else "v"
+            prev = c["prev_seed"] or "OUT"
+            print(f"    {arrow} {name}: {prev} -> {c['new_seed']}")
+
     # Build site
     from output.build_site import build as build_site
-    build_site()
+    build_site(changes=changes, stats_df=pred_df)
 
 
 def cmd_all(args):
