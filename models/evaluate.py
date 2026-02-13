@@ -5,11 +5,11 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from config import ALL_FEATURES, TRAINING_SEASONS, TOTAL_TEAMS
-from models.stage1_selection import SelectionModel
-from models.stage2_seeding import SeedingModel
+from models.stage1_selection import get_selection_model
+from models.stage2_seeding import get_seeding_model
 
 
-def leave_one_season_out_cv(df: pd.DataFrame, seasons: list[int] | None = None) -> dict:
+def leave_one_season_out_cv(df: pd.DataFrame, seasons: list[int] | None = None, model_type: str = "rf") -> dict:
     """Run leave-one-season-out cross-validation.
 
     For each season:
@@ -47,7 +47,7 @@ def leave_one_season_out_cv(df: pd.DataFrame, seasons: list[int] | None = None) 
         y_test_seed = test_df["seed"]
 
         # Stage 1: Selection
-        sel_model = SelectionModel()
+        sel_model = get_selection_model(model_type)
         sel_model.train(X_train, y_train_sel)
 
         # Get predicted field
@@ -70,7 +70,7 @@ def leave_one_season_out_cv(df: pd.DataFrame, seasons: list[int] | None = None) 
             total_actual = len(actual_teams)
 
         # Stage 2: Seeding
-        seed_model = SeedingModel()
+        seed_model = get_seeding_model(model_type)
         tourn_mask = y_train_seed.notna()
         seed_model.train(X_train[tourn_mask], y_train_seed[tourn_mask])
 
@@ -145,21 +145,21 @@ def leave_one_season_out_cv(df: pd.DataFrame, seasons: list[int] | None = None) 
     return {"per_season": results, "aggregate": aggregate}
 
 
-def print_feature_importance(df: pd.DataFrame):
+def print_feature_importance(df: pd.DataFrame, model_type: str = "rf"):
     """Train on all data and print feature importances for both models."""
     X = df[ALL_FEATURES]
     y_sel = df["made_tournament"]
     y_seed = df["seed"]
 
     print("\n  === Selection Model Feature Importance ===")
-    sel_model = SelectionModel()
+    sel_model = get_selection_model(model_type)
     sel_model.train(X, y_sel)
     sel_imp = sel_model.feature_importance()
     for _, row in sel_imp.head(15).iterrows():
         print(f"    {row['feature']:25s} {row['importance']:.4f}")
 
     print("\n  === Seeding Model Feature Importance ===")
-    seed_model = SeedingModel()
+    seed_model = get_seeding_model(model_type)
     tourn_mask = y_seed.notna()
     seed_model.train(X[tourn_mask], y_seed[tourn_mask])
     seed_imp = seed_model.feature_importance()

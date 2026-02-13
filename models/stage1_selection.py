@@ -1,13 +1,17 @@
-"""Stage 1: Random Forest Classifier for tournament selection."""
+"""Stage 1: Classifier for tournament selection (RF or XGBoost)."""
 
 import os
 
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 import joblib
 
-from config import SELECTION_RF_PARAMS, ALL_FEATURES, MODEL_DIR, TOTAL_TEAMS
+from config import (
+    SELECTION_RF_PARAMS, SELECTION_XGB_PARAMS,
+    ALL_FEATURES, MODEL_DIR, TOTAL_TEAMS,
+)
 
 
 class SelectionModel:
@@ -108,3 +112,61 @@ class SelectionModel:
         path = os.path.join(MODEL_DIR, filename)
         self.model = joblib.load(path)
         self.is_fitted = True
+
+
+class XGBSelectionModel(SelectionModel):
+    """XGBoost variant of the selection classifier."""
+
+    def __init__(self):
+        self.model = XGBClassifier(**SELECTION_XGB_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "selection_model_xgb.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "selection_model_xgb.joblib"):
+        super().load(filename)
+
+
+class EnsembleSelectionModel(SelectionModel):
+    """Averages RF and XGBoost selection probabilities."""
+
+    def __init__(self):
+        self.rf = SelectionModel()
+        self.xgb = XGBSelectionModel()
+        self.is_fitted = False
+
+    def train(self, X: pd.DataFrame, y: pd.Series):
+        self.rf.train(X, y)
+        self.xgb.train(X, y)
+        self.is_fitted = True
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        return (self.rf.predict_proba(X) + self.xgb.predict_proba(X)) / 2
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        rf_imp = self.rf.feature_importance().set_index("feature")
+        xgb_imp = self.xgb.feature_importance().set_index("feature")
+        avg = ((rf_imp["importance"] + xgb_imp["importance"]) / 2).reset_index()
+        avg.columns = ["feature", "importance"]
+        return avg.sort_values("importance", ascending=False)
+
+    def save(self, filename: str | None = None):
+        self.rf.save()
+        self.xgb.save()
+
+    def load(self, filename: str | None = None):
+        self.rf.load()
+        self.xgb.load()
+        self.is_fitted = True
+
+
+def get_selection_model(model_type: str = "rf") -> SelectionModel:
+    """Factory: return the right selection model class."""
+    if model_type == "xgb":
+        return XGBSelectionModel()
+    if model_type == "ensemble":
+        return EnsembleSelectionModel()
+    return SelectionModel()

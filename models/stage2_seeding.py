@@ -1,13 +1,17 @@
-"""Stage 2: Random Forest Regressor for seed prediction."""
+"""Stage 2: Regressor for seed prediction (RF or XGBoost)."""
 
 import os
 
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 import joblib
 
-from config import SEEDING_RF_PARAMS, ALL_FEATURES, MODEL_DIR, TEAMS_PER_SEED, SEEDS
+from config import (
+    SEEDING_RF_PARAMS, SEEDING_XGB_PARAMS,
+    ALL_FEATURES, MODEL_DIR, TEAMS_PER_SEED, SEEDS,
+)
 
 
 class SeedingModel:
@@ -96,3 +100,61 @@ class SeedingModel:
         path = os.path.join(MODEL_DIR, filename)
         self.model = joblib.load(path)
         self.is_fitted = True
+
+
+class XGBSeedingModel(SeedingModel):
+    """XGBoost variant of the seeding regressor."""
+
+    def __init__(self):
+        self.model = XGBRegressor(**SEEDING_XGB_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "seeding_model_xgb.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "seeding_model_xgb.joblib"):
+        super().load(filename)
+
+
+class EnsembleSeedingModel(SeedingModel):
+    """Averages RF and XGBoost seed predictions."""
+
+    def __init__(self):
+        self.rf = SeedingModel()
+        self.xgb = XGBSeedingModel()
+        self.is_fitted = False
+
+    def train(self, X: pd.DataFrame, y: pd.Series):
+        self.rf.train(X, y)
+        self.xgb.train(X, y)
+        self.is_fitted = True
+
+    def predict_raw(self, X: pd.DataFrame) -> np.ndarray:
+        return (self.rf.predict_raw(X) + self.xgb.predict_raw(X)) / 2
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        rf_imp = self.rf.feature_importance().set_index("feature")
+        xgb_imp = self.xgb.feature_importance().set_index("feature")
+        avg = ((rf_imp["importance"] + xgb_imp["importance"]) / 2).reset_index()
+        avg.columns = ["feature", "importance"]
+        return avg.sort_values("importance", ascending=False)
+
+    def save(self, filename: str | None = None):
+        self.rf.save()
+        self.xgb.save()
+
+    def load(self, filename: str | None = None):
+        self.rf.load()
+        self.xgb.load()
+        self.is_fitted = True
+
+
+def get_seeding_model(model_type: str = "rf") -> SeedingModel:
+    """Factory: return the right seeding model class."""
+    if model_type == "xgb":
+        return XGBSeedingModel()
+    if model_type == "ensemble":
+        return EnsembleSeedingModel()
+    return SeedingModel()

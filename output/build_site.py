@@ -8,7 +8,7 @@ from html import escape
 
 import pandas as pd
 
-from config import PROCESSED_DIR, PREDICTION_SEASON, PROJECT_ROOT, DATA_DIR
+from config import PROCESSED_DIR, PREDICTION_SEASON, PROJECT_ROOT, DATA_DIR, POWER_RANKING_WEIGHTS
 
 SITE_DIR = os.path.join(PROJECT_ROOT, "_site")
 
@@ -612,7 +612,163 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", bubble: dict | None = None, stats_df=None) -> str:
+def _build_scores_tab(stats_df: pd.DataFrame) -> str:
+    """Build an interactive matchup predictor with two searchable team dropdowns.
+
+    Embeds team stats as JSON; spread/win% computed client-side.
+    """
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Scores data not available. Run the predict command to generate.</p>'
+
+    # Build JSON blob of all teams with valid data
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+    teams_json = []
+    for _, r in df.iterrows():
+        adj_oe = pd.to_numeric(r.get("adj_oe"), errors="coerce")
+        adj_de = pd.to_numeric(r.get("adj_de"), errors="coerce")
+        barthag = pd.to_numeric(r.get("barthag"), errors="coerce")
+        net = pd.to_numeric(r.get("net_ranking"), errors="coerce")
+        wins = pd.to_numeric(r.get("wins"), errors="coerce")
+        losses = pd.to_numeric(r.get("losses"), errors="coerce")
+        if pd.isna(adj_oe) or pd.isna(adj_de) or pd.isna(barthag):
+            continue
+        espn_id = _ESPN_LOGOS.get(str(r.get("school_id", "")), "")
+        teams_json.append({
+            "name": str(r.get("team", "")),
+            "conf": str(r.get("conference", "")),
+            "espn": espn_id,
+            "oe": round(float(adj_oe), 1),
+            "de": round(float(adj_de), 1),
+            "bar": round(float(barthag), 4),
+            "net": int(net) if pd.notna(net) else 999,
+            "rec": f"{int(wins)}-{int(losses)}" if pd.notna(wins) and pd.notna(losses) else "",
+        })
+
+    teams_json.sort(key=lambda t: t["net"])
+    import json as _json
+    blob = _json.dumps(teams_json, separators=(",", ":"))
+
+    return f'<div id="scores-app"></div><script>window.__SCORES_TEAMS__={blob};</script>'
+
+
+def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
+    """Compute a weighted composite score and build an HTML rankings table."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Power Rankings data not available. Run the predict command to generate.</p>'
+
+    weights = POWER_RANKING_WEIGHTS
+    cols = list(weights.keys())
+
+    # Only keep teams with a valid NET ranking and at least some data
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    # Z-score normalize each column; handle missing values
+    for col in cols:
+        if col not in df.columns:
+            df[col] = float("nan")
+        vals = pd.to_numeric(df[col], errors="coerce")
+        mean, std = vals.mean(), vals.std()
+        if pd.notna(mean) and pd.notna(std) and std > 0:
+            z = (vals - mean) / std
+        else:
+            z = pd.Series(0.0, index=df.index)
+        # For negative weights (lower raw = better), flip sign so positive z = good
+        if weights[col] < 0:
+            z = -z
+        df[f"_z_{col}"] = z
+
+    # Composite score = sum(|weight| * z-score)
+    df["_composite"] = 0.0
+    for col in cols:
+        w = abs(weights[col])
+        df["_composite"] += w * df[f"_z_{col}"].fillna(0.0)
+
+    df = df.sort_values("_composite", ascending=False).reset_index(drop=True)
+
+    def _int(row, col):
+        v = row.get(col)
+        return str(int(v)) if pd.notna(v) else "\u2014"
+
+    def _rec(row, w_col, l_col):
+        w, l = row.get(w_col), row.get(l_col)
+        if pd.notna(w) and pd.notna(l):
+            return f"{int(w)}-{int(l)}"
+        return "\u2014"
+
+    rows = ""
+    for i, r in df.iterrows():
+        comp = float(r["_composite"])
+        # Color-code composite: green (high) → red (low) via hue interpolation
+        # Normalize composite within this set for coloring
+        comp_min = df["_composite"].min()
+        comp_max = df["_composite"].max()
+        if comp_max != comp_min:
+            t = (comp - comp_min) / (comp_max - comp_min)
+        else:
+            t = 0.5
+        # HSL: 0=red, 120=green
+        hue = int(t * 120)
+        comp_style = f"color: hsl({hue}, 70%, 50%);"
+
+        wab = r.get("wab")
+        if pd.notna(wab):
+            wab_val = float(wab)
+            wab_cls = "wab-pos" if wab_val > 0 else "wab-neg" if wab_val < 0 else ""
+            wab_str = f"{wab_val:+.1f}"
+        else:
+            wab_cls = ""
+            wab_str = "\u2014"
+
+        def _float(col, fmt=".1f"):
+            v = r.get(col)
+            return f"{float(v):{fmt}}" if pd.notna(v) else "\u2014"
+
+        # Bad losses (Q3 + Q4)
+        q3l = r.get("q3_losses")
+        q4l = r.get("q4_losses")
+        if pd.notna(q3l) and pd.notna(q4l):
+            bad_l = int(q3l) + int(q4l)
+            bad_cls = "wab-neg" if bad_l > 0 else ""
+            bad_str = str(bad_l)
+        else:
+            bad_cls = ""
+            bad_str = "\u2014"
+
+        logo = _team_logo(str(r.get("school_id", "")))
+        rows += (
+            f"<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
+            f"<td>{escape(str(r.get('conference', '')))}</td>"
+            f"<td>{_rec(r, 'wins', 'losses')}</td>"
+            f"<td style='{comp_style} font-weight:600;'>{comp:.3f}</td>"
+            f"<td>{_int(r, 'net_ranking')}</td>"
+            f"<td>{_int(r, 'sor')}</td>"
+            f"<td>{_int(r, 'pom')}</td>"
+            f"<td>{_int(r, 'net_sos')}</td>"
+            f"<td class='{wab_cls}'>{wab_str}</td>"
+            f"<td>{_int(r, 'q1_wins')}</td>"
+            f"<td class='{bad_cls}'>{bad_str}</td>"
+            f"<td>{_int(r, 'road_wins')}</td>"
+            f"<td>{_float('adj_oe')}</td>"
+            f"<td>{_float('adj_de')}</td>"
+            f"</tr>\n"
+        )
+
+    return f"""<div class="stats-scroll"><table class="stats-table" id="ranking-table">
+<thead><tr>
+    <th data-sort="num">#</th><th data-sort="str">Team</th><th data-sort="str">Conf</th><th data-sort="str">Record</th>
+    <th data-sort="num">Score</th><th data-sort="num">NET</th><th data-sort="num">SOR</th>
+    <th data-sort="num">KenPom</th><th data-sort="num">SOS</th><th data-sort="num">WAB</th>
+    <th data-sort="num">Q1 W</th><th data-sort="num">Bad L</th><th data-sort="num">Road W</th>
+    <th data-sort="num">AdjOE</th><th data-sort="num">AdjDE</th>
+</tr></thead>
+<tbody>
+{rows}</tbody>
+</table></div>"""
+
+
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -626,6 +782,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
     timestamp_match = re.search(r"^\*Last updated: (.+)\*$", md, re.MULTILINE)
     timestamp = timestamp_match.group(1) if timestamp_match else ""
+
+    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
 
     # Parse seed list table
     seed_rows = re.findall(r"^\| (\d+) \| (.+?) \|$", md, re.MULTILINE)
@@ -995,16 +1153,22 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             top: 0;
             background: var(--bg);
             z-index: 10;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
         }}
+        .tab-bar::-webkit-scrollbar {{ display: none; }}
         .tab-bar label {{
-            padding: 0.75rem 1.5rem;
+            padding: 0.75rem 1rem;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             color: var(--text-muted);
             border-bottom: 2px solid transparent;
             margin-bottom: -2px;
             transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
         }}
         .tab-bar label:hover {{
             color: var(--text);
@@ -1034,12 +1198,211 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-ranking:checked ~ .tab-bar label[for="tab-ranking"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
+        #tab-scores:checked ~ .tab-bar label[for="tab-scores"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
         #tab-conf:checked ~ #panel-conf {{ display: block; }}
         #tab-autobid:checked ~ #panel-autobid {{ display: block; }}
         #tab-matrix:checked ~ #panel-matrix {{ display: block; }}
+        #tab-ranking:checked ~ #panel-ranking {{ display: block; }}
+        #tab-scores:checked ~ #panel-scores {{ display: block; }}
+
+        /* Scores tab — interactive picker */
+        .scores-picker {{
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }}
+        .scores-side {{
+            flex: 1;
+            max-width: 340px;
+        }}
+        .scores-side label {{
+            display: block;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }}
+        .scores-search {{
+            position: relative;
+        }}
+        .scores-search input {{
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+        }}
+        .scores-search input:focus {{
+            border-color: var(--accent);
+        }}
+        .scores-dropdown {{
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 260px;
+            overflow-y: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0 0 6px 6px;
+            z-index: 20;
+        }}
+        .scores-dropdown.open {{
+            display: block;
+        }}
+        .scores-option {{
+            padding: 0.45rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        .scores-option:hover, .scores-option.active {{
+            background: rgba(249, 115, 22, 0.15);
+        }}
+        .scores-option img {{
+            width: 20px;
+            height: 20px;
+        }}
+        .scores-option .opt-meta {{
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-left: auto;
+        }}
+        .scores-vs {{
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            padding-top: 1.8rem;
+            flex-shrink: 0;
+        }}
+        .scores-result {{
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: none;
+        }}
+        .scores-result.visible {{
+            display: block;
+        }}
+        .scores-matchup {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }}
+        .scores-team-card {{
+            text-align: center;
+            min-width: 140px;
+        }}
+        .scores-team-card img {{
+            width: 48px;
+            height: 48px;
+            display: block;
+            margin: 0 auto 0.4rem;
+        }}
+        .scores-team-card .tc-name {{
+            font-weight: 700;
+            font-size: 1rem;
+        }}
+        .scores-team-card .tc-meta {{
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }}
+        .scores-team-card .tc-pct {{
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 0.3rem;
+        }}
+        .scores-spread {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }}
+        .scores-detail {{
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }}
+        .scores-detail span {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }}
+        .scores-detail .sd-val {{
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.9rem;
+        }}
+        .venue-toggle {{
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 1.5rem;
+        }}
+        .venue-btn {{
+            padding: 0.45rem 1.1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }}
+        .venue-btn:first-child {{ border-radius: 6px 0 0 6px; }}
+        .venue-btn:last-child {{ border-radius: 0 6px 6px 0; }}
+        .venue-btn:not(:first-child) {{ border-left: none; }}
+        .venue-btn.active {{
+            background: var(--accent);
+            color: var(--bg);
+            border-color: var(--accent);
+        }}
+        .venue-btn:hover:not(.active) {{
+            color: var(--text);
+        }}
+        .scores-venue {{
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+        }}
+        @media (max-width: 600px) {{
+            .scores-picker {{
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+            }}
+            .scores-side {{ max-width: none; }}
+            .scores-vs {{
+                text-align: center;
+                padding: 0;
+            }}
+            .scores-matchup {{ flex-direction: column; gap: 1rem; }}
+        }}
 
         /* Stats table */
         .stats-scroll {{
@@ -1160,6 +1523,32 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         .status-only-cbs {{ color: var(--text-muted); font-style: italic; }}
         .col-avg {{ background: rgba(99, 102, 241, 0.12); font-weight: 700; }}
 
+        /* Frozen columns for Bracket Matrix horizontal scroll */
+        #matrix-table th:nth-child(-n+4),
+        #matrix-table td:nth-child(-n+4) {{
+            position: sticky;
+            z-index: 2;
+            background: var(--bg);
+        }}
+        #matrix-table tr:hover td:nth-child(-n+4) {{
+            background: var(--surface);
+        }}
+        #matrix-table th:nth-child(-n+4) {{
+            z-index: 3;
+        }}
+        #matrix-table th:nth-child(1),
+        #matrix-table td:nth-child(1) {{ left: 0; min-width: 140px; }}
+        #matrix-table th:nth-child(2),
+        #matrix-table td:nth-child(2) {{ left: 140px; min-width: 44px; }}
+        #matrix-table th:nth-child(3),
+        #matrix-table td:nth-child(3) {{ left: 184px; min-width: 80px; }}
+        #matrix-table th:nth-child(4),
+        #matrix-table td:nth-child(4) {{ left: 264px; min-width: 50px; border-right: 2px solid var(--border); }}
+        /* Keep col-avg purple tint on the frozen avg column */
+        #matrix-table td.col-avg {{ background: color-mix(in srgb, rgba(99, 102, 241, 0.12), var(--bg)); }}
+        #matrix-table tr:hover td.col-avg {{ background: color-mix(in srgb, rgba(99, 102, 241, 0.12), var(--surface)); }}
+        #matrix-table th.col-avg {{ background: color-mix(in srgb, rgba(99, 102, 241, 0.12), var(--bg)); }}
+
         @media (max-width: 600px) {{
             h1 {{ font-size: 1.5rem; }}
             .first-four-list {{ grid-template-columns: repeat(2, 1fr); }}
@@ -1193,7 +1582,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <header>
             <h1><span class="logo">68</span>bracket</h1>
             <div class="subtitle">{title}</div>
-            <div class="timestamp">{timestamp}</div>
+            <div class="timestamp">Model: {model_label} &middot; Last Updated: {timestamp}</div>
         </header>
 
         <input type="radio" name="tabs" id="tab-bracket" class="tab-radio" checked>
@@ -1202,14 +1591,18 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-conf" class="tab-radio">
         <input type="radio" name="tabs" id="tab-autobid" class="tab-radio">
         <input type="radio" name="tabs" id="tab-matrix" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-ranking" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-scores" class="tab-radio">
 
         <div class="tab-bar">
             <label for="tab-bracket">Bracket</label>
-            <label for="tab-stats">Team Stats</label>
+            <label for="tab-ranking">Power Rankings</label>
+            <label for="tab-scores">Scores</label>
             <label for="tab-bubble">Bubble Watch</label>
-            <label for="tab-conf">Conferences</label>
             <label for="tab-autobid">Auto Bids</label>
             <label for="tab-matrix">Bracket Matrix</label>
+            <label for="tab-conf">Conferences</label>
+            <label for="tab-stats">Team Stats</label>
         </div>
 
         <div id="panel-bracket" class="tab-panel">
@@ -1265,6 +1658,16 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             {matrix_tab_html if matrix_tab_html else '<p style="color: var(--text-muted);">Bracket Matrix data not available. Run scrape and predict to generate.</p>'}
         </div>
 
+        <div id="panel-ranking" class="tab-panel">
+            <h2>Power Rankings</h2>
+            {ranking_tab_html if ranking_tab_html else '<p style="color: var(--text-muted);">Power Rankings data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-scores" class="tab-panel">
+            <h2>Matchup Predictor</h2>
+            {scores_tab_html if scores_tab_html else '<p style="color: var(--text-muted);">Scores data not available. Run the predict command to generate.</p>'}
+        </div>
+
         <div class="footnote">
             Predictions generated by <a href="https://github.com/hunterwalklin/68bracket">68bracket</a>
             — updated daily
@@ -1288,8 +1691,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                         av=parseFloat(a.cells[col].dataset.sv)||0;
                         bv=parseFloat(b.cells[col].dataset.sv)||0;
                     }}else if(type==='num'){{
-                        av=parseFloat(a.cells[col].textContent)||9999;
-                        bv=parseFloat(b.cells[col].textContent)||9999;
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
                     }}else{{
                         av=a.cells[col].textContent.toLowerCase();
                         bv=b.cells[col].textContent.toLowerCase();
@@ -1321,8 +1724,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                         av=parseFloat(a.cells[col].dataset.sv)||0;
                         bv=parseFloat(b.cells[col].dataset.sv)||0;
                     }}else if(type==='num'){{
-                        av=parseFloat(a.cells[col].textContent)||9999;
-                        bv=parseFloat(b.cells[col].textContent)||9999;
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
                     }}else{{
                         av=a.cells[col].textContent.toLowerCase();
                         bv=b.cells[col].textContent.toLowerCase();
@@ -1354,8 +1757,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                         av=parseFloat(a.cells[col].dataset.sv)||0;
                         bv=parseFloat(b.cells[col].dataset.sv)||0;
                     }}else if(type==='num'){{
-                        av=parseFloat(a.cells[col].textContent)||9999;
-                        bv=parseFloat(b.cells[col].textContent)||9999;
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
                     }}else{{
                         av=a.cells[col].textContent.toLowerCase();
                         bv=b.cells[col].textContent.toLowerCase();
@@ -1387,8 +1790,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                         av=parseFloat(a.cells[col].dataset.sv)||0;
                         bv=parseFloat(b.cells[col].dataset.sv)||0;
                     }}else if(type==='num'){{
-                        av=parseFloat(a.cells[col].textContent)||9999;
-                        bv=parseFloat(b.cells[col].textContent)||9999;
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
                     }}else{{
                         av=a.cells[col].textContent.toLowerCase();
                         bv=b.cells[col].textContent.toLowerCase();
@@ -1403,6 +1806,169 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             }});
         }})(i);
     }})();
+    (function(){{
+        var table=document.getElementById('ranking-table');
+        if(!table)return;
+        var thead=table.tHead, tbody=table.tBodies[0];
+        var ths=thead.rows[0].cells;
+        var curCol=-1, curAsc=true;
+        for(var i=0;i<ths.length;i++)(function(col){{
+            ths[col].addEventListener('click',function(){{
+                var asc=(col===curCol)?!curAsc:true;
+                var type=this.dataset.sort||'str';
+                var rows=Array.from(tbody.rows);
+                rows.sort(function(a,b){{
+                    var av,bv;
+                    if(type==='sv'){{
+                        av=parseFloat(a.cells[col].dataset.sv)||0;
+                        bv=parseFloat(b.cells[col].dataset.sv)||0;
+                    }}else if(type==='num'){{
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
+                    }}else{{
+                        av=a.cells[col].textContent.toLowerCase();
+                        bv=b.cells[col].textContent.toLowerCase();
+                        return asc?av.localeCompare(bv):bv.localeCompare(av);
+                    }}
+                    return asc?av-bv:bv-av;
+                }});
+                for(var j=0;j<rows.length;j++)tbody.appendChild(rows[j]);
+                for(var k=0;k<ths.length;k++)ths[k].classList.remove('sort-asc','sort-desc');
+                this.classList.add(asc?'sort-asc':'sort-desc');
+                curCol=col;curAsc=asc;
+            }});
+        }})(i);
+    }})();
+    /* Matchup predictor */
+    (function(){{
+        var app=document.getElementById('scores-app');
+        if(!app||!window.__SCORES_TEAMS__)return;
+        var teams=window.__SCORES_TEAMS__;
+        var sel=[null,null];
+        var venue='neutral'; /* 'homeA', 'neutral', 'homeB' */
+        var HCA=3.5; /* home court advantage in points */
+        var CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
+
+        function logoUrl(espn){{return espn?CDN+espn+'.png&h=40&w=40':'';}}
+
+        /* Build DOM */
+        app.innerHTML='<div class="scores-picker">'
+            +'<div class="scores-side" id="ss-0"><label>Team A</label><div class="scores-search"><input type="text" placeholder="Search teams..." autocomplete="off"><div class="scores-dropdown"></div></div></div>'
+            +'<div class="scores-vs">vs</div>'
+            +'<div class="scores-side" id="ss-1"><label>Team B</label><div class="scores-search"><input type="text" placeholder="Search teams..." autocomplete="off"><div class="scores-dropdown"></div></div></div>'
+            +'</div>'
+            +'<div class="venue-toggle" id="venue-toggle">'
+            +'<button class="venue-btn" data-v="homeA">Home A</button>'
+            +'<button class="venue-btn active" data-v="neutral">Neutral</button>'
+            +'<button class="venue-btn" data-v="homeB">Home B</button>'
+            +'</div>'
+            +'<div class="scores-result" id="scores-result"></div>';
+
+        /* Venue toggle handler */
+        document.getElementById('venue-toggle').addEventListener('click',function(e){{
+            var btn=e.target.closest('.venue-btn');
+            if(!btn)return;
+            venue=btn.dataset.v;
+            this.querySelectorAll('.venue-btn').forEach(function(b){{b.classList.remove('active');}});
+            btn.classList.add('active');
+            updateResult();
+        }});
+
+        function setupSide(idx){{
+            var side=document.getElementById('ss-'+idx);
+            var input=side.querySelector('input');
+            var dd=side.querySelector('.scores-dropdown');
+
+            function render(query){{
+                var q=query.toLowerCase();
+                var html='';
+                var count=0;
+                for(var i=0;i<teams.length&&count<50;i++){{
+                    var t=teams[i];
+                    if(q&&t.name.toLowerCase().indexOf(q)===-1&&t.conf.toLowerCase().indexOf(q)===-1)continue;
+                    var img=t.espn?'<img src="'+logoUrl(t.espn)+'" alt="" loading="lazy">':'';
+                    html+='<div class="scores-option" data-idx="'+i+'">'+img+'<span>'+t.name+'</span><span class="opt-meta">'+t.conf+' &middot; '+t.rec+' &middot; NET '+t.net+'</span></div>';
+                    count++;
+                }}
+                dd.innerHTML=html||'<div class="scores-option" style="color:var(--text-muted)">No teams found</div>';
+            }}
+
+            input.addEventListener('focus',function(){{
+                render(input.value);
+                dd.classList.add('open');
+            }});
+            input.addEventListener('input',function(){{
+                sel[idx]=null;
+                render(input.value);
+                dd.classList.add('open');
+                updateResult();
+            }});
+            dd.addEventListener('mousedown',function(e){{
+                var opt=e.target.closest('.scores-option');
+                if(!opt||!opt.dataset.idx)return;
+                e.preventDefault();
+                var t=teams[parseInt(opt.dataset.idx)];
+                sel[idx]=t;
+                input.value=t.name;
+                dd.classList.remove('open');
+                updateResult();
+            }});
+            input.addEventListener('blur',function(){{
+                setTimeout(function(){{dd.classList.remove('open');}},150);
+            }});
+        }}
+
+        setupSide(0);
+        setupSide(1);
+
+        function updateResult(){{
+            var res=document.getElementById('scores-result');
+            if(!sel[0]||!sel[1]){{res.classList.remove('visible');return;}}
+            var a=sel[0],b=sel[1];
+
+            /* AdjEM spread */
+            var emA=a.oe-a.de, emB=b.oe-b.de;
+            var spread=(emA-emB)*0.68;
+
+            /* Apply home court advantage */
+            if(venue==='homeA')spread+=HCA;
+            else if(venue==='homeB')spread-=HCA;
+
+            /* Convert spread to win probability using logistic function */
+            /* sigma = 11 gives roughly KenPom-calibrated results */
+            var winA=1/(1+Math.pow(10,-spread/(11*0.68)));
+            var winB=1-winA;
+
+            var pctA=(winA*100).toFixed(1);
+            var pctB=(winB*100).toFixed(1);
+            var spreadAbs=Math.abs(spread).toFixed(1);
+            var favName=spread>=0?a.name:b.name;
+
+            var hueA=Math.round(winA*120);
+            var hueB=Math.round(winB*120);
+
+            var imgA=a.espn?'<img src="'+logoUrl(a.espn)+'" alt="">':'';
+            var imgB=b.espn?'<img src="'+logoUrl(b.espn)+'" alt="">':'';
+
+            var venueLabel=venue==='homeA'?'@ '+a.name:venue==='homeB'?'@ '+b.name:'Neutral Court';
+
+            res.innerHTML='<div class="scores-matchup">'
+                +'<div class="scores-team-card">'+imgA+'<div class="tc-name">'+a.name+'</div><div class="tc-meta">'+a.conf+' &middot; '+a.rec+'</div><div class="tc-pct" style="color:hsl('+hueA+',70%,50%)">'+pctA+'%</div></div>'
+                +'<div class="scores-vs">vs</div>'
+                +'<div class="scores-team-card">'+imgB+'<div class="tc-name">'+b.name+'</div><div class="tc-meta">'+b.conf+' &middot; '+b.rec+'</div><div class="tc-pct" style="color:hsl('+hueB+',70%,50%)">'+pctB+'%</div></div>'
+                +'</div>'
+                +'<div class="scores-venue">'+venueLabel+'</div>'
+                +'<div class="scores-spread">'+favName+' by '+spreadAbs+'</div>'
+                +'<div class="scores-detail">'
+                +'<span>AdjOE<span class="sd-val">'+a.oe+' / '+b.oe+'</span></span>'
+                +'<span>AdjDE<span class="sd-val">'+a.de+' / '+b.de+'</span></span>'
+                +'<span>AdjEM<span class="sd-val">'+emA.toFixed(1)+' / '+emB.toFixed(1)+'</span></span>'
+                +'<span>Barthag<span class="sd-val">'+a.bar.toFixed(4)+' / '+b.bar.toFixed(4)+'</span></span>'
+                +'<span>NET<span class="sd-val">'+a.net+' / '+b.net+'</span></span>'
+                +'</div>';
+            res.classList.add('visible');
+        }}
+    }})();
     </script>
 </body>
 </html>"""
@@ -1410,13 +1976,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     return html
 
 
-def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None):
+def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None, model_type: str = "rf"):
     """Build the site from the latest predictions.
 
     Args:
         changes: dict mapping team_name -> {"direction": "up"|"down", "prev_seed": N, "new_seed": N}
         stats_df: DataFrame of all teams with stats columns.
         bubble: dict with "last_4_in", "first_4_out", "next_4_out" team name lists.
+        model_type: "rf" or "xgb".
     """
     md_path = os.path.join(PROCESSED_DIR, f"predictions_{PREDICTION_SEASON}.md")
     if not os.path.exists(md_path):
@@ -1485,9 +2052,18 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     matrix_tab_html = _build_matrix_tab(seed_rows_for_matrix, bracketology, stats_df)
 
+    ranking_tab_html = ""
+    if stats_df is not None:
+        ranking_tab_html = _build_power_rankings_tab(stats_df)
+
+    # Build scores tab (interactive team picker)
+    scores_tab_html = ""
+    if stats_df is not None:
+        scores_tab_html = _build_scores_tab(stats_df)
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, bubble=bubble, stats_df=stats_df)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:

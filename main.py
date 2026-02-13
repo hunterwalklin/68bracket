@@ -145,20 +145,24 @@ def cmd_build(args):
 def cmd_train(args):
     """Train both models on all training data."""
     from features.build_features import load_features, get_training_data
-    from models.stage1_selection import SelectionModel
-    from models.stage2_seeding import SeedingModel
+    from models.stage1_selection import get_selection_model
+    from models.stage2_seeding import get_seeding_model
+
+    model_type = getattr(args, "model", "rf")
+    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
+    print(f"Model: {model_label}")
 
     print("Loading features...")
     df = load_features()
     X, y_selection, y_seed = get_training_data(df)
 
     print("\nTraining Stage 1: Selection model...")
-    sel_model = SelectionModel()
+    sel_model = get_selection_model(model_type)
     sel_model.train(X, y_selection)
     sel_model.save()
 
     print("\nTraining Stage 2: Seeding model...")
-    seed_model = SeedingModel()
+    seed_model = get_seeding_model(model_type)
     tourn_mask = y_seed.notna()
     seed_model.train(X[tourn_mask], y_seed[tourn_mask])
     seed_model.save()
@@ -171,26 +175,34 @@ def cmd_evaluate(args):
     from features.build_features import load_features
     from models.evaluate import leave_one_season_out_cv, print_feature_importance
 
+    model_type = getattr(args, "model", "rf")
+    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
+    print(f"Model: {model_label}")
+
     print("Loading features...")
     df = load_features()
 
     print("\nRunning leave-one-season-out cross-validation...")
-    results = leave_one_season_out_cv(df)
+    results = leave_one_season_out_cv(df, model_type=model_type)
 
     if args.importance:
-        print_feature_importance(df)
+        print_feature_importance(df, model_type=model_type)
 
 
 def cmd_predict(args):
     """Generate predictions for the current season."""
     from features.build_features import load_features, get_prediction_data
-    from models.stage1_selection import SelectionModel
-    from models.stage2_seeding import SeedingModel
-    from output.bracket_builder import assign_regions
+    from models.stage1_selection import get_selection_model
+    from models.stage2_seeding import get_seeding_model
+    from output.bracket_builder import assign_regions, build_matchups, build_first_four
     from output.display import (
         display_seed_list, display_bracket,
         display_selection_summary, generate_markdown,
     )
+
+    model_type = getattr(args, "model", "rf")
+    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
+    print(f"Model: {model_label}")
 
     season = args.season or PREDICTION_SEASON
 
@@ -205,9 +217,9 @@ def cmd_predict(args):
     print(f"  {len(pred_df)} teams found for {season}")
 
     # Load trained models
-    sel_model = SelectionModel()
+    sel_model = get_selection_model(model_type)
     sel_model.load()
-    seed_model = SeedingModel()
+    seed_model = get_seeding_model(model_type)
     seed_model.load()
 
     # Stage 1: Select 68 teams
@@ -254,6 +266,15 @@ def cmd_predict(args):
     display_selection_summary(bracket)
     display_bracket(bracket, season=season)
 
+    import json
+
+    # Save matchups for scores tab
+    matchups = build_matchups(bracket)
+    first_four_games = build_first_four(bracket)
+    matchups_path = os.path.join(PROCESSED_DIR, "matchups.json")
+    with open(matchups_path, "w") as f:
+        json.dump({"matchups": matchups, "first_four": first_four_games}, f)
+
     # Save markdown output
     md = generate_markdown(bracket, season=season, bubble=bubble)
     md_path = os.path.join(PROCESSED_DIR, f"predictions_{season}.md")
@@ -262,7 +283,6 @@ def cmd_predict(args):
     print(f"\n  Markdown saved to {md_path}")
 
     # Compute day-over-day changes for teams that played
-    import json
     snapshot_path = os.path.join(PROCESSED_DIR, "daily_snapshot.json")
     changes = {}  # team_name -> {"direction": "up"|"down", "prev_seed": N, "new_seed": N}
 
@@ -323,13 +343,16 @@ def cmd_predict(args):
 
     # Build site
     from output.build_site import build as build_site
-    build_site(changes=changes, stats_df=all_with_probs, bubble=bubble)
+    build_site(changes=changes, stats_df=all_with_probs, bubble=bubble, model_type=model_type)
 
 
 def cmd_all(args):
     """Run the full pipeline: scrape, build, train, evaluate, predict."""
+    model_type = getattr(args, "model", "rf")
+    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
+
     print("=" * 60)
-    print("  68bracket - Full Pipeline")
+    print(f"  68bracket - Full Pipeline ({model_label})")
     print("=" * 60)
 
     args.include_current = True
@@ -392,20 +415,28 @@ Commands:
     subparsers.add_parser("build", help="Build feature matrix")
 
     # Train
-    subparsers.add_parser("train", help="Train models")
+    train_parser = subparsers.add_parser("train", help="Train models")
+    train_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
+                              help="Model type: rf (Random Forest) or xgb (XGBoost)")
 
     # Evaluate
     eval_parser = subparsers.add_parser("evaluate", help="Run cross-validation")
     eval_parser.add_argument("--importance", action="store_true",
                              help="Show feature importance analysis")
+    eval_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
+                             help="Model type: rf (Random Forest) or xgb (XGBoost)")
 
     # Predict
     pred_parser = subparsers.add_parser("predict", help="Generate predictions")
     pred_parser.add_argument("--season", type=int, default=None,
                              help=f"Season to predict (default: {PREDICTION_SEASON})")
+    pred_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
+                             help="Model type: rf (Random Forest) or xgb (XGBoost)")
 
     # All
-    subparsers.add_parser("all", help="Run the full pipeline")
+    all_parser = subparsers.add_parser("all", help="Run the full pipeline")
+    all_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
+                            help="Model type: rf (Random Forest) or xgb (XGBoost)")
 
     args = parser.parse_args()
 

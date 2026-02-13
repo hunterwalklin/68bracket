@@ -105,3 +105,47 @@ SEEDING_RF_PARAMS = {
     "random_state": 42,
     "n_jobs": -1,
 }
+
+SELECTION_XGB_PARAMS = {
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "scale_pos_weight": 4.4,  # ~365/68 ratio for class imbalance
+    "random_state": 42,
+    "n_jobs": -1,
+    "eval_metric": "logloss",
+}
+
+SEEDING_XGB_PARAMS = {
+    "n_estimators": 500,
+    "max_depth": 5,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42,
+    "n_jobs": -1,
+}
+
+# Power Rankings — display-only composite score (not a model feature)
+# Z-score normalized, then weighted. Negative weight = lower raw value is better.
+POWER_RANKING_WEIGHTS = {
+    # Rankings (deduped — NET, one results-based, one predictive)
+    "net_ranking": -0.18,
+    "sor": -0.10,
+    "pom": -0.08,
+    # Results
+    "wab": 0.10,
+    "q1_wins": 0.10,
+    "q3_losses": -0.04,
+    "q4_losses": -0.04,
+    # Efficiency
+    "barthag": 0.06,
+    "adj_oe": 0.05,
+    "adj_de": -0.05,
+    "nrtg": 0.05,
+    # Schedule & context
+    "net_sos": -0.05,
+    "road_wins": 0.05,
+}
