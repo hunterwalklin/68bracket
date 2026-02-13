@@ -19,6 +19,7 @@ def cmd_scrape(args):
     from data.scrape_nitty_gritty import NittyGrittyScraper
     from data.scrape_torvik import TorvikvScraper
     from data.scrape_conferences import ConferenceScraper
+    from data.scrape_bracketology import BracketologyScraper
 
     current_only = getattr(args, "current_only", False)
 
@@ -62,6 +63,18 @@ def cmd_scrape(args):
                 existing = os.path.join(PROCESSED_DIR, filename)
                 if os.path.exists(existing):
                     print(f"  Keeping previous {filename}")
+
+        # Bracketology is always current-season-only
+        print("\nScraping CBS bracketology...")
+        try:
+            brack_scraper = BracketologyScraper()
+            brack_scraper.force_refresh = True
+            brack_scraper.scrape_all()
+        except Exception as e:
+            print(f"  Error scraping bracketology: {e}")
+            existing = os.path.join(PROCESSED_DIR, "bracketology.json")
+            if os.path.exists(existing):
+                print("  Keeping previous bracketology.json")
     else:
         # Full scrape: all seasons, overwrites parquet files entirely.
         seasons = TRAINING_SEASONS.copy()
@@ -90,6 +103,17 @@ def cmd_scrape(args):
                 existing = os.path.join(PROCESSED_DIR, filename)
                 if os.path.exists(existing):
                     print(f"  Keeping previous {filename}")
+
+        # Bracketology is always current-season-only
+        print("\nScraping CBS bracketology...")
+        try:
+            brack_scraper = BracketologyScraper()
+            brack_scraper.scrape_all()
+        except Exception as e:
+            print(f"  Error scraping bracketology: {e}")
+            existing = os.path.join(PROCESSED_DIR, "bracketology.json")
+            if os.path.exists(existing):
+                print("  Keeping previous bracketology.json")
 
     print("\nScraping complete!")
 
@@ -296,7 +320,7 @@ def cmd_predict(args):
 
     # Build site
     from output.build_site import build as build_site
-    build_site(changes=changes, stats_df=pred_df)
+    build_site(changes=changes, stats_df=all_with_probs, bubble=bubble)
 
 
 def cmd_all(args):

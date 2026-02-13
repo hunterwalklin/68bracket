@@ -20,6 +20,9 @@ SR_TOURNAMENT_URL = SR_BASE + "/postseason/{season}-ncaa.html"
 WARRENNOLAN_NITTY_URL = "https://www.warrennolan.com/basketball/{year}/net-nitty"
 WARRENNOLAN_COMPARE_URL = "https://www.warrennolan.com/basketball/{year}/compare-rankings"
 
+# CBS Bracketology
+CBS_BRACKETOLOGY_URL = "https://www.cbssports.com/college-basketball/bracketology/"
+
 # Scraping settings
 REQUEST_DELAY = 15.0  # seconds between requests (Sports-Reference rate limit)
 REQUEST_TIMEOUT = 30  # seconds
