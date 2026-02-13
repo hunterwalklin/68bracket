@@ -348,7 +348,7 @@ def _build_bubble_tab(bubble: dict | None, stats_df) -> str:
 
 
 def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | None, stats_df) -> str:
-    """Compare our seed predictions against CBS bracketology projections.
+    """Compare our seed predictions against bracketology sources.
 
     Args:
         seed_rows: List of (seed, teams_str) from the predictions markdown.
@@ -369,33 +369,28 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
         seed = int(seed_str)
         for t in teams_str.split(", "):
             clean = t.rstrip("*").strip()
-            our_teams[clean] = {"seed": seed, "region": ""}
+            our_teams[clean] = {"seed": seed}
             our_order[clean] = pos
             pos += 1
 
-    # Parse our regions from bracket data (will be filled by md_to_html caller)
-    # For now, region comes from bracketology or stays empty
-
-    # Parse CBS teams from bracketology JSON
-    cbs_teams = {}  # team_name -> {"seed": N, "region": "X", "school_id": "..."}
-    source_name = ""
+    # Parse each bracketology source separately
+    sources = {}  # source_label -> {team_name -> {"seed": N, "school_id": "..."}}
     for src, src_data in bracketology.get("sources", {}).items():
-        source_name = src
+        src_teams = {}
         for entry in src_data.get("teams", []):
-            cbs_teams[entry["team"]] = {
+            src_teams[entry["team"]] = {
                 "seed": entry["seed"],
-                "region": entry.get("region", ""),
                 "school_id": entry.get("school_id", ""),
             }
+        sources[src] = src_teams
 
-    if not cbs_teams:
-        return '<p style="color: var(--text-muted);">No CBS bracketology data found.</p>'
+    if not sources:
+        return '<p style="color: var(--text-muted);">No bracketology data found.</p>'
 
-    # Build a unified list of all teams from both sources
-    all_team_names = set(our_teams.keys()) | set(cbs_teams.keys())
+    # Short labels for column headers
+    source_labels = list(sources.keys())
 
-    # Also try matching by normalized name for teams that appear under different names
-    # Build a school_id lookup for our teams using stats_df
+    # Build school_id lookup for our teams using stats_df
     our_id_to_name = {}
     if stats_df is not None:
         for name in our_teams:
@@ -405,122 +400,147 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
                 if sid:
                     our_id_to_name[sid] = name
 
-    cbs_id_to_name = {v["school_id"]: k for k, v in cbs_teams.items() if v.get("school_id")}
+    # Match each source's teams to our teams (by name or school_id)
+    matched = {}  # source_label -> {our_team_name -> src_data}
+    unmatched = {}  # source_label -> {src_team_name -> src_data}
+    for src_label, src_teams in sources.items():
+        matched[src_label] = {}
+        unmatched[src_label] = dict(src_teams)
 
-    # Match CBS teams to our teams by school_id
-    cbs_matched = {}  # our_team_name -> cbs_data
-    unmatched_cbs = dict(cbs_teams)
+        for src_name, src_data in src_teams.items():
+            if src_name in our_teams:
+                matched[src_label][src_name] = src_data
+                unmatched[src_label].pop(src_name, None)
+                continue
 
-    for cbs_name, cbs_data in cbs_teams.items():
-        # Direct name match
-        if cbs_name in our_teams:
-            cbs_matched[cbs_name] = cbs_data
-            unmatched_cbs.pop(cbs_name, None)
-            continue
+            sid = src_data.get("school_id", "")
+            if sid and sid in our_id_to_name:
+                our_name = our_id_to_name[sid]
+                matched[src_label][our_name] = src_data
+                unmatched[src_label].pop(src_name, None)
 
-        # school_id match
-        sid = cbs_data.get("school_id", "")
-        if sid and sid in our_id_to_name:
-            our_name = our_id_to_name[sid]
-            cbs_matched[our_name] = cbs_data
-            unmatched_cbs.pop(cbs_name, None)
+    # Collect all teams only in external sources (not in ours)
+    only_external = {}  # team_name -> {source_label -> seed}
+    for src_label, src_unmatched in unmatched.items():
+        for src_name, src_data in src_unmatched.items():
+            if src_name not in only_external:
+                only_external[src_name] = {"net": ""}
+            only_external[src_name][src_label] = src_data["seed"]
 
-    # Build rows
+    # Get NET for external-only teams
+    if stats_df is not None:
+        for name in only_external:
+            m = stats_df[stats_df["team"] == name]
+            if not m.empty:
+                net_val = m.iloc[0].get("net_ranking")
+                if pd.notna(net_val):
+                    only_external[name]["net"] = str(int(net_val))
+
+    # Build rows for our teams
     matrix_rows = []
-
-    # Teams in our bracket (matched or only-ours)
     for name, our_data in our_teams.items():
         our_seed = our_data["seed"]
         net = ""
         if stats_df is not None:
-            match = stats_df[stats_df["team"] == name]
-            if not match.empty:
-                net_val = match.iloc[0].get("net_ranking")
+            m = stats_df[stats_df["team"] == name]
+            if not m.empty:
+                net_val = m.iloc[0].get("net_ranking")
                 if pd.notna(net_val):
                     net = str(int(net_val))
 
-        if name in cbs_matched:
-            cbs_data = cbs_matched[name]
-            cbs_seed = cbs_data["seed"]
-            diff = our_seed - cbs_seed
-            abs_diff = abs(diff)
-            cbs_region = cbs_data.get("region", "")
+        row = {"team": name, "our_seed": our_seed, "net": net, "src_seeds": {}}
+        for src_label in source_labels:
+            if name in matched[src_label]:
+                row["src_seeds"][src_label] = matched[src_label][name]["seed"]
 
-            if diff == 0:
-                status = "Agreement"
-                status_cls = "diff-zero"
-            elif diff < 0:
-                status = "Higher"      # We rate higher (lower seed number)
-                status_cls = "diff-pos"
-            else:
-                status = "Lower"       # We rate lower (higher seed number)
-                status_cls = "diff-neg"
+        matrix_rows.append(row)
 
-            diff_str = f"{diff:+d}" if diff != 0 else "0"
-            diff_cls = "diff-pos" if diff < 0 else "diff-neg" if diff > 0 else "diff-zero"
-
-            matrix_rows.append({
-                "team": name, "our_seed": our_seed, "cbs_seed": cbs_seed,
-                "diff": diff, "abs_diff": abs_diff, "diff_str": diff_str,
-                "diff_cls": diff_cls, "our_region": our_data.get("region", ""),
-                "cbs_region": cbs_region, "net": net,
-                "status": status, "status_cls": status_cls,
-            })
-        else:
-            matrix_rows.append({
-                "team": name, "our_seed": our_seed, "cbs_seed": None,
-                "diff": None, "abs_diff": 99, "diff_str": "",
-                "diff_cls": "", "our_region": our_data.get("region", ""),
-                "cbs_region": "", "net": net,
-                "status": "Only Ours", "status_cls": "status-only-ours",
-            })
-
-    # Teams only in CBS bracket
-    for cbs_name, cbs_data in unmatched_cbs.items():
-        net = ""
-        if stats_df is not None:
-            match = stats_df[stats_df["team"] == cbs_name]
-            if not match.empty:
-                net_val = match.iloc[0].get("net_ranking")
-                if pd.notna(net_val):
-                    net = str(int(net_val))
-
-        matrix_rows.append({
-            "team": cbs_name, "our_seed": None, "cbs_seed": cbs_data["seed"],
-            "diff": None, "abs_diff": 99, "diff_str": "",
-            "diff_cls": "", "our_region": "",
-            "cbs_region": cbs_data.get("region", ""), "net": net,
-            "status": "Only CBS", "status_cls": "status-only-cbs",
-        })
+    # Add external-only teams
+    for name, ext_data in only_external.items():
+        row = {"team": name, "our_seed": None, "net": ext_data.get("net", ""), "src_seeds": {}}
+        for src_label in source_labels:
+            if src_label in ext_data and src_label != "net":
+                row["src_seeds"][src_label] = ext_data[src_label]
+        matrix_rows.append(row)
 
     # Sort by S-curve order (teams not in our bracket go to the bottom)
     matrix_rows.sort(key=lambda r: our_order.get(r["team"], 9999))
 
+    # Build HTML
     rows_html = ""
-    for i, r in enumerate(matrix_rows):
-        our_seed_str = str(r["our_seed"]) if r["our_seed"] is not None else "\u2014"
-        cbs_seed_str = str(r["cbs_seed"]) if r["cbs_seed"] is not None else "\u2014"
-        diff_display = r["diff_str"] if r["diff_str"] else "\u2014"
-        our_seed_sv = r["our_seed"] if r["our_seed"] is not None else 99
-        cbs_seed_sv = r["cbs_seed"] if r["cbs_seed"] is not None else 99
-        diff_sv = r["abs_diff"]
+    for r in matrix_rows:
+        our_seed = r["our_seed"]
+        our_seed_str = str(our_seed) if our_seed is not None else "\u2014"
+        our_seed_sv = our_seed if our_seed is not None else 99
         net_sv = int(r["net"]) if r["net"] else 9999
+
+        src_cells = ""
+        for src_label in source_labels:
+            src_seed = r["src_seeds"].get(src_label)
+            if src_seed is not None:
+                src_sv = src_seed
+                src_str = str(src_seed)
+                if our_seed is not None:
+                    diff = our_seed - src_seed
+                    if diff < 0:
+                        cls = "diff-pos"
+                    elif diff > 0:
+                        cls = "diff-neg"
+                    else:
+                        cls = "diff-zero"
+                else:
+                    cls = "status-only-cbs"
+            else:
+                src_sv = 99
+                src_str = "\u2014"
+                cls = ""
+            src_cells += f"<td class='{cls}' data-sv='{src_sv}'>{src_str}</td>"
+
+        # Status based on whether team is in our bracket and any source
+        has_any_src = bool(r["src_seeds"])
+        if our_seed is None:
+            status = "Not in Ours"
+            status_cls = "status-only-cbs"
+        elif not has_any_src:
+            status = "Only Ours"
+            status_cls = "status-only-ours"
+        else:
+            # Check agreement across all sources that have this team
+            diffs = [our_seed - s for s in r["src_seeds"].values()]
+            if all(d == 0 for d in diffs):
+                status = "Agreement"
+                status_cls = "diff-zero"
+            elif all(d <= 0 for d in diffs):
+                status = "Higher"
+                status_cls = "diff-pos"
+            elif all(d >= 0 for d in diffs):
+                status = "Lower"
+                status_cls = "diff-neg"
+            else:
+                status = "Mixed"
+                status_cls = ""
 
         rows_html += (
             f"<tr>"
             f"<td class='stats-team'>{escape(r['team'])}</td>"
             f"<td data-sv='{our_seed_sv}'>{our_seed_str}</td>"
-            f"<td data-sv='{cbs_seed_sv}'>{cbs_seed_str}</td>"
-            f"<td class='{r['diff_cls']}' data-sv='{diff_sv}'>{diff_display}</td>"
-            f"<td data-sv='{net_sv}'>{r['net'] or '\u2014'}</td>"
-            f"<td class='{r['status_cls']}'>{r['status']}</td>"
+            f"{src_cells}"
+            f"<td data-sv='{net_sv}'>{r['net'] or chr(0x2014)}</td>"
+            f"<td class='{status_cls}'>{status}</td>"
             f"</tr>\n"
         )
 
+    # Build header with dynamic source columns
+    src_headers = ""
+    for src_label in source_labels:
+        # Short display name: "CBS - Palm" -> "CBS", "ESPN - Lunardi" -> "ESPN"
+        short = src_label.split(" - ")[0].strip()
+        src_headers += f"<th data-sort='sv'>{escape(short)}</th>"
+
     return f"""<div class="stats-scroll"><table class="stats-table" id="matrix-table">
 <thead><tr>
-    <th data-sort="str">Team</th><th data-sort="sv">Our Seed</th><th data-sort="sv">CBS Seed</th>
-    <th data-sort="sv">Diff</th><th data-sort="sv">NET</th><th data-sort="str">Status</th>
+    <th data-sort="str">Team</th><th data-sort="sv">Ours</th>{src_headers}
+    <th data-sort="sv">NET</th><th data-sort="str">Status</th>
 </tr></thead>
 <tbody>
 {rows_html}</tbody>

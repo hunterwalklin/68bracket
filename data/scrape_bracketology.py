@@ -1,4 +1,4 @@
-"""Scrape bracketology projections from CBS Sports (Jerry Palm)."""
+"""Scrape bracketology projections from CBS Sports (Palm) and ESPN (Lunardi)."""
 
 import hashlib
 import json
@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 
 from config import (
     RAW_DIR, PROCESSED_DIR, CACHE_EXPIRY_DAYS,
-    CBS_BRACKETOLOGY_URL,
+    CBS_BRACKETOLOGY_URL, ESPN_BRACKETOLOGY_URL,
 )
 
 
@@ -419,6 +419,36 @@ class BracketologyScraper:
 
         return teams
 
+    def scrape_espn(self) -> pd.DataFrame:
+        """Scrape ESPN bracketology page for team seeds and regions.
+
+        Returns DataFrame with: team, school_id, seed, region, source
+        """
+        url = ESPN_BRACKETOLOGY_URL
+        html = self._fetch_with_playwright(url)
+        soup = BeautifulSoup(html, "lxml")
+
+        teams = []
+
+        # ESPN uses same general patterns as CBS — try all strategies
+        teams = self._parse_bracket_structure(soup)
+
+        if not teams:
+            teams = self._parse_seed_team_text(soup)
+
+        if not teams:
+            teams = self._parse_from_text(soup)
+
+        if not teams:
+            print("  Warning: could not parse ESPN bracketology page")
+            print("  Cached HTML available at:", self._cache_path(url))
+            return pd.DataFrame()
+
+        df = pd.DataFrame(teams)
+        df["source"] = "ESPN - Lunardi"
+        print(f"  ESPN bracketology: {len(df)} teams parsed")
+        return df
+
     def save(self, df: pd.DataFrame) -> str:
         """Save bracketology data as JSON to processed dir."""
         os.makedirs(PROCESSED_DIR, exist_ok=True)
@@ -444,7 +474,19 @@ class BracketologyScraper:
 
     def scrape_all(self) -> pd.DataFrame:
         """Scrape all bracketology sources and save."""
-        df = self.scrape_cbs()
-        if not df.empty:
-            self.save(df)
-        return df
+        dfs = []
+
+        for name, method in [("CBS", self.scrape_cbs), ("ESPN", self.scrape_espn)]:
+            try:
+                df = method()
+                if not df.empty:
+                    dfs.append(df)
+            except Exception as e:
+                print(f"  Error scraping {name} bracketology: {e}")
+
+        if not dfs:
+            return pd.DataFrame()
+
+        combined = pd.concat(dfs, ignore_index=True)
+        self.save(combined)
+        return combined
