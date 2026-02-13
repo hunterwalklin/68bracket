@@ -19,6 +19,13 @@ if os.path.exists(_espn_logos_path):
     with open(_espn_logos_path, "r") as _f:
         _ESPN_LOGOS = json.load(_f)
 
+# ESPN conference logo mapping: conf_name -> slug
+_ESPN_CONF_LOGOS = {}
+_espn_conf_logos_path = os.path.join(DATA_DIR, "espn_conf_logos.json")
+if os.path.exists(_espn_conf_logos_path):
+    with open(_espn_conf_logos_path, "r") as _f:
+        _ESPN_CONF_LOGOS = json.load(_f)
+
 
 def _team_logo(school_id: str) -> str:
     """Return an <img> tag for a team's ESPN logo, or empty string if unknown."""
@@ -26,6 +33,14 @@ def _team_logo(school_id: str) -> str:
     if not espn_id:
         return ""
     return f'<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/{espn_id}.png&h=40&w=40" alt="" loading="lazy">'
+
+
+def _conf_logo(conf_name: str) -> str:
+    """Return an <img> tag for a conference's ESPN logo, or empty string if unknown."""
+    slug = _ESPN_CONF_LOGOS.get(conf_name)
+    if not slug:
+        return ""
+    return f'<img class="conf-logo" src="https://a.espncdn.com/i/teamlogos/ncaa_conf/sml/trans/{slug}.gif" alt="" loading="lazy">'
 
 
 def _style_team(name: str, changes: dict, is_play_in: bool = False) -> str:
@@ -158,10 +173,11 @@ def _build_conf_tab(stats_df) -> str:
         wab_cls = "wab-pos" if wab_val > 0 else "wab-neg" if wab_val < 0 else ""
         wab_str = f"{wab_val:+.1f}"
 
+        clogo = _conf_logo(str(r['conference']))
         rows += (
             f"<tr>"
             f"<td>{i + 1}</td>"
-            f"<td class='stats-team'>{escape(str(r['conference']))}</td>"
+            f"<td class='stats-team'>{clogo}{escape(str(r['conference']))}</td>"
             f"<td>{int(r['teams'])}</td>"
             f"<td data-sv='{int(r['bids']) if int(r['bids']) > 0 else -1}'>{int(r['bids'])}</td>"
             f"<td>{r['avg_net']:.1f}</td>"
@@ -1011,6 +1027,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         .team-logo {{
             width: 20px;
             height: 20px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }}
+        .conf-logo {{
+            width: 18px;
+            height: 18px;
             vertical-align: middle;
             margin-right: 4px;
         }}
