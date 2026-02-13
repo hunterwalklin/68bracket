@@ -341,6 +341,7 @@ def _build_bubble_tab(bubble: dict | None, stats_df) -> str:
         return f'<div class="bubble-tab-section">{header_html}{table}</div>'
 
     html = ""
+    html += _build_section("Last 4 Byes", bubble.get("last_4_byes", []), "bubble-bye")
     html += _build_section("Last 4 In", bubble.get("last_4_in", []), "bubble-in")
     html += _build_section("First 4 Out", bubble.get("first_4_out", []), "bubble-out")
     html += _build_section("Next 4 Out", bubble.get("next_4_out", []), "bubble-far")
@@ -547,7 +548,7 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", bubble: dict | None = None) -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -585,6 +586,9 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             return f'<div class="bubble-row {css_class}"><div class="bubble-label">{label}</div><div class="bubble-teams">{items}</div></div>'
 
         bubble_html = '<div class="bubble-section"><h2>Bubble Watch</h2>'
+        last_4_byes = bubble.get("last_4_byes", []) if bubble else []
+        if last_4_byes:
+            bubble_html += _bubble_row("Last 4 Byes", ", ".join(last_4_byes), "bubble-bye")
         bubble_html += _bubble_row("Last 4 In", last_4_in[0], "bubble-in")
         if first_4_out:
             bubble_html += _bubble_row("First 4 Out", first_4_out[0], "bubble-out")
@@ -764,6 +768,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             margin-bottom: 0.4rem;
         }}
 
+        .bubble-bye {{
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+        }}
+
         .bubble-in {{
             background: var(--green-bg);
             border-left: 3px solid var(--green);
@@ -787,6 +796,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             min-width: 100px;
         }}
 
+        .bubble-bye .bubble-label {{ color: #3b82f6; }}
         .bubble-in .bubble-label {{ color: var(--green); }}
         .bubble-out .bubble-label {{ color: var(--red); }}
         .bubble-far .bubble-label {{ color: var(--text-muted); }}
@@ -991,6 +1001,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             background: var(--red-bg);
             border-left: 3px solid var(--red);
         }}
+        .bubble-tab-header.bubble-bye {{
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+        }}
         .bubble-tab-header.bubble-far {{
             background: var(--surface);
             border-left: 3px solid var(--text-muted);
@@ -1001,6 +1015,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             text-transform: uppercase;
             letter-spacing: 0.04em;
         }}
+        .bubble-bye .bubble-tab-label {{ color: #3b82f6; }}
         .bubble-in .bubble-tab-label {{ color: var(--green); }}
         .bubble-out .bubble-tab-label {{ color: var(--red); }}
         .bubble-far .bubble-tab-label {{ color: var(--text-muted); }}
@@ -1317,6 +1332,19 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
         conf_tab_html = _build_conf_tab(stats_df)
         autobid_tab_html = _build_autobid_tab(stats_df)
 
+    # Compute last_4_byes if missing (older bubble.json files lack this field)
+    if bubble and "last_4_byes" not in bubble and stats_df is not None:
+        last_4_in_names = set(bubble.get("last_4_in", []))
+        first_4_out_names = set(bubble.get("first_4_out", []))
+        next_4_out_names = set(bubble.get("next_4_out", []))
+        exclude = last_4_in_names | first_4_out_names | next_4_out_names
+        # At-large teams that are in the field but not on the bubble edges
+        candidates = stats_df[
+            (stats_df["selection_prob"] > 0.5)
+            & (~stats_df["team"].isin(exclude))
+        ].sort_values("selection_prob")
+        bubble["last_4_byes"] = candidates.head(4)["team"].tolist()
+
     bubble_tab_html = _build_bubble_tab(bubble, stats_df)
 
     # Load bracketology data and build matrix tab
@@ -1335,7 +1363,7 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, bubble=bubble)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:

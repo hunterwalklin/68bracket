@@ -215,9 +215,10 @@ def cmd_predict(args):
     field = sel_model.select_field(pred_df)
     print(f"  Selected {len(field)} teams")
 
-    # Compute bubble: last 4 in, first 4 out, next 4 out
+    # Compute bubble: last 4 byes, last 4 in, first 4 out, next 4 out
     at_large = field[field["selection_method"] == "at_large"].sort_values("selection_prob")
     last_4_in = at_large.head(4)[["team", "selection_prob"]].values.tolist()
+    last_4_byes = at_large.iloc[4:8][["team", "selection_prob"]].values.tolist()
 
     selected_ids = set(field["school_id"])
     all_with_probs = pred_df.copy()
@@ -228,12 +229,14 @@ def cmd_predict(args):
     next_4_out = not_selected.iloc[4:8][["team", "selection_prob"]].values.tolist()
 
     bubble = {
+        "last_4_byes": [t for t, _ in last_4_byes],
         "last_4_in": [t for t, _ in last_4_in],
         "first_4_out": [t for t, _ in first_4_out],
         "next_4_out": [t for t, _ in next_4_out],
     }
 
     print(f"\n  Bubble:")
+    print(f"    Last 4 Byes:  {', '.join(bubble['last_4_byes'])}")
     print(f"    Last 4 In:    {', '.join(bubble['last_4_in'])}")
     print(f"    First 4 Out:  {', '.join(bubble['first_4_out'])}")
     print(f"    Next 4 Out:   {', '.join(bubble['next_4_out'])}")
