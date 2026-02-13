@@ -8,9 +8,24 @@ from html import escape
 
 import pandas as pd
 
-from config import PROCESSED_DIR, PREDICTION_SEASON, PROJECT_ROOT
+from config import PROCESSED_DIR, PREDICTION_SEASON, PROJECT_ROOT, DATA_DIR
 
 SITE_DIR = os.path.join(PROJECT_ROOT, "_site")
+
+# ESPN logo mapping: school_id -> espn_id
+_ESPN_LOGOS = {}
+_espn_logos_path = os.path.join(DATA_DIR, "espn_logos.json")
+if os.path.exists(_espn_logos_path):
+    with open(_espn_logos_path, "r") as _f:
+        _ESPN_LOGOS = json.load(_f)
+
+
+def _team_logo(school_id: str) -> str:
+    """Return an <img> tag for a team's ESPN logo, or empty string if unknown."""
+    espn_id = _ESPN_LOGOS.get(school_id)
+    if not espn_id:
+        return ""
+    return f'<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/{espn_id}.png&h=40&w=40" alt="" loading="lazy">'
 
 
 def _style_team(name: str, changes: dict, is_play_in: bool = False) -> str:
@@ -75,10 +90,11 @@ def _build_stats_table(stats_df: pd.DataFrame) -> str:
                 return int(w) * 100 - int(l)
             return -9999
 
+        logo = _team_logo(str(r.get('school_id', '')))
         rows += (
             f"<tr>"
             f"<td>{i + 1}</td>"
-            f"<td class='stats-team'>{escape(str(r.get('team', '')))}</td>"
+            f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
             f"<td>{escape(str(r.get('conference', '')))}</td>"
             f"<td data-sv='{_sv('wins', 'losses')}'>{_rec('wins', 'losses')}</td>"
             f"<td>{_int('net_ranking')}</td>"
@@ -131,7 +147,7 @@ def _build_conf_tab(stats_df) -> str:
         "q3l": grouped["q3_losses"].sum(),
         "q4w": grouped["q4_wins"].sum(),
         "q4l": grouped["q4_losses"].sum(),
-    }).sort_values("avg_net").reset_index()
+    }).sort_values("bids", ascending=False).reset_index()
 
     def _sv(w, l):
         return int(w) * 100 - int(l)
@@ -235,17 +251,19 @@ def _build_autobid_tab(stats_df) -> str:
         ru_name = escape(str(ru["team"])) if ru is not None else "—"
         ru_net = int(ru["net_ranking"]) if ru is not None and pd.notna(ru.get("net_ranking")) else "—"
 
+        w_logo = _team_logo(str(w.get('school_id', '')))
+        ru_logo = _team_logo(str(ru.get('school_id', ''))) if ru is not None else ""
         rows += (
             f"<tr>"
             f"<td>{i + 1}</td>"
             f"<td class='stats-team'>{escape(str(c['conf']))}</td>"
-            f"<td class='stats-team'>{escape(str(w['team']))}</td>"
+            f"<td class='stats-team'>{w_logo}{escape(str(w['team']))}</td>"
             f"<td data-sv='{conf_sv}'>{conf_rec}</td>"
             f"<td>{net}</td>"
             f"<td class='{prob_cls}'>{prob_str}</td>"
             f"<td class='{status_cls}'>{status}</td>"
             f"<td data-sv='{al_sv}'>{al}</td>"
-            f"<td>{ru_name}</td>"
+            f"<td>{ru_logo}{ru_name}</td>"
             f"<td>{ru_net}</td>"
             f"</tr>\n"
         )
@@ -311,9 +329,10 @@ def _build_bubble_tab(bubble: dict | None, stats_df) -> str:
                 wab_cls = ""
                 wab_str = "—"
 
+            b_logo = _team_logo(str(r.get('school_id', '')))
             rows += (
                 f"<tr>"
-                f"<td class='stats-team'>{escape(str(r.get('team', '')))}</td>"
+                f"<td class='stats-team'>{b_logo}{escape(str(r.get('team', '')))}</td>"
                 f"<td>{escape(str(r.get('conference', '')))}</td>"
                 f"<td>{_rec(r, 'wins', 'losses')}</td>"
                 f"<td class='{prob_cls}'>{prob_str}</td>"
@@ -442,14 +461,16 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
     for name, our_data in our_teams.items():
         our_seed = our_data["seed"]
         net = ""
+        sid = ""
         if stats_df is not None:
             m = stats_df[stats_df["team"] == name]
             if not m.empty:
                 net_val = m.iloc[0].get("net_ranking")
                 if pd.notna(net_val):
                     net = str(int(net_val))
+                sid = str(m.iloc[0].get("school_id", ""))
 
-        row = {"team": name, "our_seed": our_seed, "net": net, "src_seeds": {}}
+        row = {"team": name, "school_id": sid, "our_seed": our_seed, "net": net, "src_seeds": {}}
         for src_label in source_labels:
             if name in matched[src_label]:
                 row["src_seeds"][src_label] = matched[src_label][name]["seed"]
@@ -458,7 +479,12 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
 
     # Add external-only teams
     for name, ext_data in only_external.items():
-        row = {"team": name, "our_seed": None, "net": ext_data.get("net", ""), "src_seeds": {}}
+        ext_sid = ""
+        if stats_df is not None:
+            m = stats_df[stats_df["team"] == name]
+            if not m.empty:
+                ext_sid = str(m.iloc[0].get("school_id", ""))
+        row = {"team": name, "school_id": ext_sid, "our_seed": None, "net": ext_data.get("net", ""), "src_seeds": {}}
         for src_label in source_labels:
             if src_label in ext_data and src_label != "net":
                 row["src_seeds"][src_label] = ext_data[src_label]
@@ -521,9 +547,10 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
                 status = "Mixed"
                 status_cls = ""
 
+        m_logo = _team_logo(r.get('school_id', ''))
         rows_html += (
             f"<tr>"
-            f"<td class='stats-team'>{escape(r['team'])}</td>"
+            f"<td class='stats-team'>{m_logo}{escape(r['team'])}</td>"
             f"<td data-sv='{our_seed_sv}'>{our_seed_str}</td>"
             f"{src_cells}"
             f"<td data-sv='{net_sv}'>{r['net'] or chr(0x2014)}</td>"
@@ -980,6 +1007,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
         .stats-team {{
             font-weight: 600;
+        }}
+        .team-logo {{
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin-right: 4px;
         }}
         .wab-pos {{ color: var(--green); }}
         .wab-neg {{ color: var(--red); }}
