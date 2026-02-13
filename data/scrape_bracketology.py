@@ -1,21 +1,23 @@
-"""Scrape bracketology projections from CBS Sports (Palm) and ESPN (Lunardi)."""
+"""Scrape bracketology projections from Bracket Matrix (bracketmatrix.com).
 
-import hashlib
+Bracket Matrix aggregates 100+ bracketology sources into a single static HTML
+table, replacing the old CBS/ESPN Playwright scrapers that consistently timed out.
+"""
+
 import json
 import os
 import re
-from datetime import datetime, timedelta
+import warnings
+from datetime import datetime
 
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from config import (
-    RAW_DIR, PROCESSED_DIR, CACHE_EXPIRY_DAYS,
-    CBS_BRACKETOLOGY_URL, ESPN_BRACKETOLOGY_URL,
-)
+from config import RAW_DIR, PROCESSED_DIR, BRACKET_MATRIX_URL
+from data.scraper_base import ScraperBase
 
 
-# CBS display name → SR school_id (only entries that need manual mapping)
+# Display name → SR school_id (only entries that need manual mapping)
 CBS_TO_SR = {
     "UConn": "connecticut",
     "Connecticut": "connecticut",
@@ -38,9 +40,13 @@ CBS_TO_SR = {
     "Miami FL": "miami-fl",
     "Miami OH": "miami-oh",
     "Miami": "miami-fl",
+    "Miami (FLA.)": "miami-fl",
+    "Miami (Ohio)": "miami-oh",
     "Saint Mary's": "saint-marys-ca",
     "Saint Mary's (CA)": "saint-marys-ca",
     "St. Mary's": "saint-marys-ca",
+    "St. Mary\u2019s (CA)": "saint-marys-ca",
+    "St. Mary's (CA)": "saint-marys-ca",
     "St. John's": "st-johns-ny",
     "St. John's (NY)": "st-johns-ny",
     "St. Bonaventure": "st-bonaventure",
@@ -61,10 +67,13 @@ CBS_TO_SR = {
     "ETSU": "east-tennessee-state",
     "East Tennessee State": "east-tennessee-state",
     "East Tennessee St.": "east-tennessee-state",
+    "E. Tennessee State": "east-tennessee-state",
+    "E. Tennessee St.": "east-tennessee-state",
     "UNC Wilmington": "north-carolina-wilmington",
     "UNC Greensboro": "north-carolina-greensboro",
     "UNC Asheville": "north-carolina-asheville",
     "UNCW": "north-carolina-wilmington",
+    "NC-Wilmington": "north-carolina-wilmington",
     "UMBC": "maryland-baltimore-county",
     "UMKC": "missouri-kansas-city",
     "UIC": "illinois-chicago",
@@ -181,7 +190,6 @@ CBS_TO_SR = {
 def _normalize_name(name: str) -> str:
     """Lowercase/strip helper to match team names to school_id."""
     name = name.strip()
-    # Remove common suffixes like "(FL)", conference tags, seed numbers
     name = re.sub(r"\s*\(\d+\)\s*$", "", name)
     name = re.sub(r"\s*#\s*$", "", name)
     name = re.sub(r"\s*\*\s*$", "", name)
@@ -189,14 +197,12 @@ def _normalize_name(name: str) -> str:
 
 
 def _name_to_school_id(name: str) -> str:
-    """Convert a CBS display name to SR school_id format."""
+    """Convert a display name to SR school_id format."""
     name = _normalize_name(name)
 
-    # Check direct mapping first
     if name in CBS_TO_SR:
         return CBS_TO_SR[name]
 
-    # Standard conversion: lowercase, St. → State, spaces → hyphens
     sid = name.lower()
     sid = re.sub(r"\bst\.\s*$", "state", sid)
     sid = re.sub(r"\bst\.\s", "state ", sid)
@@ -209,248 +215,128 @@ def _name_to_school_id(name: str) -> str:
     return sid
 
 
-class BracketologyScraper:
-    """Scrape bracketology projections using Playwright for JS-rendered pages."""
+class BracketologyScraper(ScraperBase):
+    """Scrape consensus bracketology from Bracket Matrix.
 
-    def __init__(self):
-        self.force_refresh = False
-        os.makedirs(RAW_DIR, exist_ok=True)
+    Bracket Matrix aggregates 100+ bracketology sources into a single HTML
+    table. This replaces the old CBS/ESPN Playwright-based scrapers.
+    """
 
-    def _cache_path(self, url: str) -> str:
-        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
-        safe = url.replace("https://", "").replace("/", "_").replace("?", "_")[:60]
-        return os.path.join(RAW_DIR, f"bracketology_{safe}_{url_hash}.html")
+    def _fetch_bracket_matrix(self) -> str:
+        """Fetch Bracket Matrix HTML, bypassing expired SSL cert."""
+        url = BRACKET_MATRIX_URL
+        cache_path = self._cache_path(url)
 
-    def _is_cache_valid(self, path: str) -> bool:
-        if not os.path.exists(path):
-            return False
-        mtime = datetime.fromtimestamp(os.path.getmtime(path))
-        return datetime.now() - mtime < timedelta(days=CACHE_EXPIRY_DAYS)
-
-    def _fetch_with_playwright(self, url: str) -> str:
-        """Fetch a page using Playwright to render JS content."""
-        cache = self._cache_path(url)
-        if not self.force_refresh and self._is_cache_valid(cache):
-            with open(cache, "r", encoding="utf-8") as f:
+        if not self.force_refresh and self._is_cache_valid(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as f:
                 return f.read()
 
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, wait_until="networkidle", timeout=60000)
-            # CBS may need extra time for bracket JS to render
-            page.wait_for_timeout(3000)
-            html = page.content()
-            browser.close()
-
-        with open(cache, "w", encoding="utf-8") as f:
-            f.write(html)
+        # Bracket Matrix has an expired SSL cert — disable verification
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.session.verify = False
+            html = self.fetch(url)
+            self.session.verify = True
 
         return html
 
-    def scrape_cbs(self) -> pd.DataFrame:
-        """Scrape CBS Sports bracketology page for team seeds and regions.
+    def _parse_source_names(self, rows) -> dict[int, str]:
+        """Parse source names from header row, accounting for colspans.
 
-        Returns DataFrame with: team, school_id, seed, region, source
+        Returns mapping of data-column index -> source name.
         """
-        url = CBS_BRACKETOLOGY_URL
-        html = self._fetch_with_playwright(url)
-        soup = BeautifulSoup(html, "lxml")
+        header_cells = rows[0].find_all(["td", "th"])
+        col_names = []
+        for cell in header_cells:
+            text = cell.get_text(strip=True)
+            colspan = int(cell.get("colspan", 1))
+            col_names.append(text)
+            for _ in range(colspan - 1):
+                col_names.append("")
 
+        # Individual source columns start at col 6 (after seed, team, conf,
+        # avg seed, # brackets, and an empty gap column)
+        source_map = {}
+        for i in range(6, len(col_names)):
+            if col_names[i]:
+                source_map[i] = col_names[i]
+        return source_map
+
+    def _parse_table(self, html: str) -> tuple[list[dict], dict[int, str]]:
+        """Parse the Bracket Matrix HTML table into team records.
+
+        Table structure (single <table>):
+          Row 0: Source names (with colspans)
+          Row 1: Update dates
+          Row 2: Empty separator
+          Row 3+: Data — col 0=seed, 1=team, 2=conf, 3=avg seed,
+                  4=# brackets, 5=gap, 6+=per-source seeds
+          Stops at "OTHER AT-LARGES" separator row.
+
+        Returns (teams list, source_map) where source_map is
+        col_index -> source_name for individual sources.
+        """
+        soup = self.parse_html(html)
+        table = soup.find("table")
+        if not table:
+            print("  Warning: no table found on Bracket Matrix page")
+            return [], {}
+
+        rows = table.find_all("tr")
+        source_map = self._parse_source_names(rows)
         teams = []
 
-        # Strategy 1: Look for bracket matchup rows with "(seed) Team" pattern
-        # CBS typically renders bracket as matchup cards within region containers
-        teams = self._parse_bracket_structure(soup)
-
-        if not teams:
-            # Strategy 2: Look for seed-team text patterns anywhere in page
-            teams = self._parse_seed_team_text(soup)
-
-        if not teams:
-            # Strategy 3: Parse from text content using regex
-            teams = self._parse_from_text(soup)
-
-        if not teams:
-            print("  Warning: could not parse CBS bracketology page")
-            print("  Cached HTML available at:", self._cache_path(url))
-            return pd.DataFrame()
-
-        df = pd.DataFrame(teams)
-        df["source"] = "CBS - Palm"
-        print(f"  CBS bracketology: {len(df)} teams parsed")
-        return df
-
-    def _parse_bracket_structure(self, soup: BeautifulSoup) -> list[dict]:
-        """Parse bracket from structured HTML elements (region divs, matchup rows)."""
-        teams = []
-
-        # Look for region containers — CBS typically uses heading elements or
-        # data attributes to identify regions
-        region_keywords = ["east", "west", "south", "midwest"]
-
-        # Try finding region headers and parsing teams within each section
-        all_text = soup.get_text()
-
-        # Look for elements that contain region names as headers
-        for el in soup.find_all(["h1", "h2", "h3", "h4", "div", "span", "section"]):
-            text = el.get_text(strip=True).lower()
-            for region in region_keywords:
-                if region in text and "region" in text:
-                    # Found a region header — look for seed/team data nearby
-                    parent = el.find_parent(["div", "section"]) or el.parent
-                    if parent:
-                        region_teams = self._extract_teams_from_element(
-                            parent, region.capitalize()
-                        )
-                        teams.extend(region_teams)
-
-        # Deduplicate by school_id
-        seen = set()
-        unique = []
-        for t in teams:
-            if t["school_id"] not in seen:
-                seen.add(t["school_id"])
-                unique.append(t)
-
-        return unique
-
-    def _extract_teams_from_element(self, el, region: str) -> list[dict]:
-        """Extract (seed, team) pairs from an element's text."""
-        teams = []
-        text = el.get_text("\n")
-
-        # Pattern: "(seed) Team Name" or "seed. Team Name" or "seed Team Name"
-        # Common CBS patterns: "1 Duke", "(1) Duke", "No. 1 Duke"
-        patterns = [
-            r"\((\d{1,2})\)\s+([A-Z][A-Za-z\s.&'()\-]+)",
-            r"(?:No\.\s*)?(\d{1,2})\s+([A-Z][A-Za-z\s.&'()\-]+)",
-        ]
-
-        for pattern in patterns:
-            for m in re.finditer(pattern, text):
-                seed = int(m.group(1))
-                name = m.group(2).strip()
-                # Stop at common delimiters
-                name = re.split(r"\s{2,}|\n|\t|vs\.?|,", name)[0].strip()
-                if 1 <= seed <= 16 and len(name) > 2:
-                    school_id = _name_to_school_id(name)
-                    teams.append({
-                        "team": _normalize_name(name),
-                        "school_id": school_id,
-                        "seed": seed,
-                        "region": region,
-                    })
-
-        return teams
-
-    def _parse_seed_team_text(self, soup: BeautifulSoup) -> list[dict]:
-        """Scan all text for seed-team patterns, inferring regions from context."""
-        teams = []
-        current_region = ""
-        region_keywords = {
-            "east": "East", "west": "West",
-            "south": "South", "midwest": "Midwest",
-        }
-
-        for el in soup.find_all(["div", "span", "td", "li", "p", "h2", "h3", "h4"]):
-            text = el.get_text(strip=True)
-            if not text:
+        for row in rows[3:]:  # skip header rows
+            cells = row.find_all(["td", "th"])
+            if len(cells) < 5:
                 continue
 
-            # Check for region header
-            text_lower = text.lower()
-            for key, val in region_keywords.items():
-                if key in text_lower and ("region" in text_lower or len(text) < 30):
-                    current_region = val
-                    break
+            seed_text = cells[0].get_text(strip=True)
+            team_name = cells[1].get_text(strip=True)
 
-            # Look for seed-team pattern
-            m = re.match(r"^\(?(\d{1,2})\)?\s+(.+)$", text)
-            if m:
-                seed = int(m.group(1))
-                name = m.group(2).strip()
-                name = re.split(r"\s{2,}|\t|vs\.?", name)[0].strip()
-                if 1 <= seed <= 16 and len(name) > 2:
-                    school_id = _name_to_school_id(name)
-                    teams.append({
-                        "team": _normalize_name(name),
-                        "school_id": school_id,
-                        "seed": seed,
-                        "region": current_region or "Unknown",
-                    })
+            # Stop at "OTHER AT-LARGES" separator
+            if "OTHER AT-LARGE" in team_name.upper():
+                break
 
-        return teams
-
-    def _parse_from_text(self, soup: BeautifulSoup) -> list[dict]:
-        """Last resort: parse entire page text for seed-team patterns."""
-        teams = []
-        text = soup.get_text("\n")
-        current_region = ""
-
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line:
+            if not seed_text.isdigit():
                 continue
 
-            # Region detection
-            lower = line.lower()
-            for key, val in [("east", "East"), ("west", "West"),
-                             ("south", "South"), ("midwest", "Midwest")]:
-                if key in lower and ("region" in lower or len(line) < 30):
-                    current_region = val
+            seed = int(seed_text)
+            if seed < 1 or seed > 16:
+                continue
 
-            # Seed-team pattern
-            m = re.match(r"^\(?(\d{1,2})\)?\s+([A-Z].+)$", line)
-            if m:
-                seed = int(m.group(1))
-                name = m.group(2).strip()
-                name = re.split(r"\s{2,}|\t|vs\.?|,", name)[0].strip()
-                if 1 <= seed <= 16 and len(name) > 2:
-                    school_id = _name_to_school_id(name)
-                    teams.append({
-                        "team": _normalize_name(name),
-                        "school_id": school_id,
-                        "seed": seed,
-                        "region": current_region or "Unknown",
-                    })
+            avg_seed_text = cells[3].get_text(strip=True)
+            try:
+                avg_seed = float(avg_seed_text)
+            except ValueError:
+                avg_seed = float(seed)
 
-        return teams
+            # Parse individual source seeds
+            per_source = {}
+            for col_idx, src_name in source_map.items():
+                if col_idx < len(cells):
+                    val = cells[col_idx].get_text(strip=True)
+                    if val.isdigit():
+                        per_source[src_name] = int(val)
 
-    def scrape_espn(self) -> pd.DataFrame:
-        """Scrape ESPN bracketology page for team seeds and regions.
+            school_id = _name_to_school_id(team_name)
+            teams.append({
+                "team": _normalize_name(team_name),
+                "school_id": school_id,
+                "seed": round(avg_seed),
+                "avg_seed": avg_seed,
+                "region": "",
+                "per_source": per_source,
+            })
 
-        Returns DataFrame with: team, school_id, seed, region, source
+        return teams, source_map
+
+    def save(self, teams: list[dict], source_names: list[str]) -> str:
+        """Save bracketology data as JSON to processed dir.
+
+        Outputs one entry per individual source in the sources dict,
+        plus a "Bracket Matrix (Avg)" consensus entry.
         """
-        url = ESPN_BRACKETOLOGY_URL
-        html = self._fetch_with_playwright(url)
-        soup = BeautifulSoup(html, "lxml")
-
-        teams = []
-
-        # ESPN uses same general patterns as CBS — try all strategies
-        teams = self._parse_bracket_structure(soup)
-
-        if not teams:
-            teams = self._parse_seed_team_text(soup)
-
-        if not teams:
-            teams = self._parse_from_text(soup)
-
-        if not teams:
-            print("  Warning: could not parse ESPN bracketology page")
-            print("  Cached HTML available at:", self._cache_path(url))
-            return pd.DataFrame()
-
-        df = pd.DataFrame(teams)
-        df["source"] = "ESPN - Lunardi"
-        print(f"  ESPN bracketology: {len(df)} teams parsed")
-        return df
-
-    def save(self, df: pd.DataFrame) -> str:
-        """Save bracketology data as JSON to processed dir."""
         os.makedirs(PROCESSED_DIR, exist_ok=True)
         out_path = os.path.join(PROCESSED_DIR, "bracketology.json")
 
@@ -459,34 +345,61 @@ class BracketologyScraper:
             "sources": {},
         }
 
-        for source in df["source"].unique():
-            source_df = df[df["source"] == source]
-            data["sources"][source] = {
-                "teams": source_df[["team", "school_id", "seed", "region"]]
-                .to_dict(orient="records")
-            }
+        # Consensus average entry (keep float for 2-decimal display)
+        data["sources"]["BM Avg"] = {
+            "teams": [
+                {
+                    "team": t["team"],
+                    "school_id": t["school_id"],
+                    "seed": t["avg_seed"],
+                    "region": "",
+                }
+                for t in teams
+            ]
+        }
+
+        # Individual source entries
+        for src_name in source_names:
+            src_teams = []
+            for t in teams:
+                seed = t["per_source"].get(src_name)
+                if seed is not None:
+                    src_teams.append({
+                        "team": t["team"],
+                        "school_id": t["school_id"],
+                        "seed": seed,
+                        "region": "",
+                    })
+            if src_teams:
+                data["sources"][src_name] = {"teams": src_teams}
 
         with open(out_path, "w") as f:
             json.dump(data, f, indent=2)
 
-        print(f"  Bracketology saved to {out_path} ({len(df)} teams)")
+        n_sources = len(data["sources"]) - 1  # exclude avg
+        print(f"  Bracketology saved to {out_path} "
+              f"({len(teams)} teams, {n_sources} sources)")
         return out_path
 
     def scrape_all(self) -> pd.DataFrame:
-        """Scrape all bracketology sources and save."""
-        dfs = []
+        """Scrape Bracket Matrix and save."""
+        html = self._fetch_bracket_matrix()
+        teams, source_map = self._parse_table(html)
 
-        for name, method in [("CBS", self.scrape_cbs), ("ESPN", self.scrape_espn)]:
-            try:
-                df = method()
-                if not df.empty:
-                    dfs.append(df)
-            except Exception as e:
-                print(f"  Error scraping {name} bracketology: {e}")
-
-        if not dfs:
+        if not teams:
+            print("  Warning: no teams parsed from Bracket Matrix")
             return pd.DataFrame()
 
-        combined = pd.concat(dfs, ignore_index=True)
-        self.save(combined)
-        return combined
+        source_names = [name for _, name in sorted(source_map.items())]
+        print(f"  Bracket Matrix: {len(teams)} teams, "
+              f"{len(source_names)} sources parsed")
+        self.save(teams, source_names)
+
+        # Return DataFrame for backward compat (uses avg seed)
+        df = pd.DataFrame([
+            {"team": t["team"], "school_id": t["school_id"],
+             "seed": t["seed"], "region": ""}
+            for t in teams
+        ])
+        df["source"] = "Bracket Matrix"
+        return df

@@ -21,8 +21,7 @@ WARRENNOLAN_NITTY_URL = "https://www.warrennolan.com/basketball/{year}/net-nitty
 WARRENNOLAN_COMPARE_URL = "https://www.warrennolan.com/basketball/{year}/compare-rankings"
 
 # Bracketology
-CBS_BRACKETOLOGY_URL = "https://www.cbssports.com/college-basketball/bracketology/"
-ESPN_BRACKETOLOGY_URL = "https://www.espn.com/espn/feature/story/_/page/bracketology/ncaa-bracketology-2026-march-madness-men-field-predictions"
+BRACKET_MATRIX_URL = "http://www.bracketmatrix.com/"
 
 # Scraping settings
 REQUEST_DELAY = 15.0  # seconds between requests (Sports-Reference rate limit)

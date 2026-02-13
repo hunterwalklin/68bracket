@@ -423,8 +423,9 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
     if not sources:
         return '<p style="color: var(--text-muted);">No bracketology data found.</p>'
 
-    # Short labels for column headers
-    source_labels = list(sources.keys())
+    # Short labels for column headers — separate BM Avg from individual sources
+    avg_label = "BM Avg" if "BM Avg" in sources else None
+    source_labels = [s for s in sources if s != avg_label]
 
     # Build school_id lookup for our teams using stats_df
     our_id_to_name = {}
@@ -490,6 +491,8 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
         for src_label in source_labels:
             if name in matched[src_label]:
                 row["src_seeds"][src_label] = matched[src_label][name]["seed"]
+        if avg_label and name in matched.get(avg_label, {}):
+            row["src_seeds"][avg_label] = matched[avg_label][name]["seed"]
 
         matrix_rows.append(row)
 
@@ -504,6 +507,8 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
         for src_label in source_labels:
             if src_label in ext_data and src_label != "net":
                 row["src_seeds"][src_label] = ext_data[src_label]
+        if avg_label and avg_label in ext_data and avg_label != "net":
+            row["src_seeds"][avg_label] = ext_data[avg_label]
         matrix_rows.append(row)
 
     # Sort by S-curve order (teams not in our bracket go to the bottom)
@@ -539,52 +544,68 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
                 cls = ""
             src_cells += f"<td class='{cls}' data-sv='{src_sv}'>{src_str}</td>"
 
-        # Status based on whether team is in our bracket and any source
-        has_any_src = bool(r["src_seeds"])
+        # Status: compare our seed to BM Avg (0.5 threshold)
+        avg_seed_val = r["src_seeds"].get(avg_label) if avg_label else None
         if our_seed is None:
             status = "Not in Ours"
             status_cls = "status-only-cbs"
-        elif not has_any_src:
+        elif avg_seed_val is None:
             status = "Only Ours"
             status_cls = "status-only-ours"
         else:
-            # Check agreement across all sources that have this team
-            diffs = [our_seed - s for s in r["src_seeds"].values()]
-            if all(d == 0 for d in diffs):
-                status = "Agreement"
-                status_cls = "diff-zero"
-            elif all(d <= 0 for d in diffs):
+            diff = our_seed - avg_seed_val
+            if diff <= -0.5:
                 status = "Higher"
                 status_cls = "diff-pos"
-            elif all(d >= 0 for d in diffs):
+            elif diff >= 0.5:
                 status = "Lower"
                 status_cls = "diff-neg"
             else:
-                status = "Mixed"
-                status_cls = ""
+                status = "Agreement"
+                status_cls = "diff-zero"
+
+        # BM Avg cell (highlighted)
+        avg_cell = ""
+        if avg_label:
+            avg_seed = r["src_seeds"].get(avg_label)
+            if avg_seed is not None:
+                avg_sv = avg_seed
+                avg_str = f"{avg_seed:.2f}"
+                if our_seed is not None:
+                    diff = our_seed - avg_seed
+                    avg_cls = "diff-pos" if diff < 0 else "diff-neg" if diff > 0 else "diff-zero"
+                else:
+                    avg_cls = "status-only-cbs"
+            else:
+                avg_sv = 99
+                avg_str = "\u2014"
+                avg_cls = ""
+            avg_cell = f"<td class='col-avg {avg_cls}' data-sv='{avg_sv}'>{avg_str}</td>"
 
         m_logo = _team_logo(r.get('school_id', ''))
         rows_html += (
             f"<tr>"
             f"<td class='stats-team'>{m_logo}{escape(r['team'])}</td>"
             f"<td data-sv='{our_seed_sv}'>{our_seed_str}</td>"
+            f"<td class='{status_cls}'>{status}</td>"
+            f"{avg_cell}"
             f"{src_cells}"
             f"<td data-sv='{net_sv}'>{r['net'] or chr(0x2014)}</td>"
-            f"<td class='{status_cls}'>{status}</td>"
             f"</tr>\n"
         )
 
     # Build header with dynamic source columns
+    avg_header = f"<th class='col-avg' data-sort='sv'>Avg</th>" if avg_label else ""
     src_headers = ""
     for src_label in source_labels:
-        # Short display name: "CBS - Palm" -> "CBS", "ESPN - Lunardi" -> "ESPN"
         short = src_label.split(" - ")[0].strip()
         src_headers += f"<th data-sort='sv'>{escape(short)}</th>"
 
     return f"""<div class="stats-scroll"><table class="stats-table" id="matrix-table">
 <thead><tr>
-    <th data-sort="str">Team</th><th data-sort="sv">Ours</th>{src_headers}
-    <th data-sort="sv">NET</th><th data-sort="str">Status</th>
+    <th data-sort="str">Team</th><th data-sort="sv">Ours</th>
+    <th data-sort="str">Status</th>{avg_header}{src_headers}
+    <th data-sort="sv">NET</th>
 </tr></thead>
 <tbody>
 {rows_html}</tbody>
@@ -1137,6 +1158,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         .diff-zero {{ color: var(--text-muted); }}
         .status-only-ours {{ color: var(--accent); }}
         .status-only-cbs {{ color: var(--text-muted); font-style: italic; }}
+        .col-avg {{ background: rgba(99, 102, 241, 0.12); font-weight: 700; }}
 
         @media (max-width: 600px) {{
             h1 {{ font-size: 1.5rem; }}

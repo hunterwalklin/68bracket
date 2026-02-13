@@ -65,7 +65,7 @@ def cmd_scrape(args):
                     print(f"  Keeping previous {filename}")
 
         # Bracketology is always current-season-only
-        print("\nScraping CBS bracketology...")
+        print("\nScraping Bracket Matrix...")
         try:
             brack_scraper = BracketologyScraper()
             brack_scraper.force_refresh = True
@@ -105,7 +105,7 @@ def cmd_scrape(args):
                     print(f"  Keeping previous {filename}")
 
         # Bracketology is always current-season-only
-        print("\nScraping CBS bracketology...")
+        print("\nScraping Bracket Matrix...")
         try:
             brack_scraper = BracketologyScraper()
             brack_scraper.scrape_all()
