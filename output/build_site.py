@@ -591,7 +591,7 @@ def _build_matrix_tab(seed_rows: list[tuple[str, str]], bracketology: dict | Non
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", bubble: dict | None = None) -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", bubble: dict | None = None, stats_df=None) -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -620,12 +620,21 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     # Parse bracket code blocks
     brackets = re.findall(r"## (\w+) Region\n\n```text\n(.+?)```", md, re.DOTALL)
 
+    # Build name -> school_id lookup for logos
+    _name_to_sid = {}
+    if stats_df is not None:
+        for _, _r in stats_df.iterrows():
+            _name_to_sid[str(_r.get("team", ""))] = str(_r.get("school_id", ""))
+
     # Build bubble HTML
     bubble_html = ""
     if last_4_in:
         def _bubble_row(label: str, teams_str: str, css_class: str) -> str:
             teams = [t.strip() for t in teams_str.split(", ")]
-            items = "".join(f'<span class="bubble-team">{escape(t)}</span>' for t in teams)
+            items = "".join(
+                f'<span class="bubble-team">{_team_logo(_name_to_sid.get(t, ""))}{escape(t)}</span>'
+                for t in teams
+            )
             return f'<div class="bubble-row {css_class}"><div class="bubble-label">{label}</div><div class="bubble-teams">{items}</div></div>'
 
         bubble_html = '<div class="bubble-section"><h2>Bubble Watch</h2>'
@@ -647,19 +656,48 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         for t in team_list:
             is_play_in = t.endswith("*")
             clean_name = t[:-1] if is_play_in else t
-            styled.append(_style_team(clean_name, changes, is_play_in))
+            logo = _team_logo(_name_to_sid.get(clean_name, ""))
+            styled.append(logo + _style_team(clean_name, changes, is_play_in))
         seed_table_rows += f"<tr><td class='seed-num'>{seed}</td><td>{', '.join(styled)}</td></tr>\n"
 
     first_four_html = ""
     for game in first_four:
-        first_four_html += f"<li>{game}</li>\n"
+        # Add logos to First Four: "(seed) Team1 vs Team2 [Region]"
+        ff_match = re.match(r'\((\d+)\) (.+?) vs (.+?) \[(.+?)\]', game)
+        if ff_match:
+            ff_seed, ff_t1, ff_t2, ff_region = ff_match.groups()
+            ff_logo1 = _team_logo(_name_to_sid.get(ff_t1.strip(), ""))
+            ff_logo2 = _team_logo(_name_to_sid.get(ff_t2.strip(), ""))
+            first_four_html += f"<li>({ff_seed}) {ff_logo1}{escape(ff_t1)} vs {ff_logo2}{escape(ff_t2)} [{ff_region}]</li>\n"
+        else:
+            first_four_html += f"<li>{escape(game)}</li>\n"
 
     brackets_html = ""
     for region, art in brackets:
+        # Add team logos to bracket art lines
+        def _bracket_logo_sub(m):
+            seed = m.group(1)
+            team_name = m.group(2)
+            # Handle play-in "Team1/Team2" — use first team's logo
+            first_team = team_name.split("/")[0]
+            sid = _name_to_sid.get(first_team, "")
+            espn_id = _ESPN_LOGOS.get(sid)
+            if espn_id:
+                logo = f'<img class="bracket-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/{espn_id}.png&h=40&w=40" alt="" loading="lazy">'
+            else:
+                logo = ""
+            # Escape & in team names for HTML
+            safe_name = team_name.replace("&", "&amp;")
+            return f'{logo}({seed}) {safe_name} '
+        processed_art = re.sub(
+            r'\((\d+)\) (.+?) (?=─)',
+            _bracket_logo_sub,
+            art.rstrip(),
+        )
         brackets_html += f"""
         <div class="bracket-region">
             <h3>{region} Region</h3>
-            <pre>{art.rstrip()}</pre>
+            <pre>{processed_art}</pre>
         </div>
         """
 
@@ -901,6 +939,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             overflow-x: auto;
             color: var(--text);
             white-space: pre;
+            padding-left: 22px;
+        }}
+        .bracket-logo {{
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            margin-left: -20px;
+            margin-right: 4px;
         }}
 
         .footnote {{
@@ -1096,7 +1142,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             h1 {{ font-size: 1.5rem; }}
             .first-four-list {{ grid-template-columns: repeat(2, 1fr); }}
             .brackets-grid {{ grid-template-columns: 1fr; }}
-            .bracket-region pre {{ font-size: 0.55rem; }}
+            .bracket-region pre {{ font-size: 0.55rem; padding-left: 16px; }}
+            .bracket-logo {{ width: 12px; height: 12px; margin-left: -14px; margin-right: 2px; }}
             .container {{ padding: 1rem 0.5rem; }}
             .tab-bar {{
                 overflow-x: auto;
@@ -1418,7 +1465,7 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, bubble=bubble)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, bubble=bubble, stats_df=stats_df)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
