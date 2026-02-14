@@ -1249,6 +1249,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
+            mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
+            -webkit-mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
+        }}
+        .tab-bar.scrolled-end {{
+            mask-image: none;
+            -webkit-mask-image: none;
         }}
         .tab-bar::-webkit-scrollbar {{ display: none; }}
         .tab-bar label {{
@@ -1961,6 +1967,24 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 if(this.checked)location.hash=this.id.replace('tab-','');
             }});
         }});
+        /* Tab bar scroll fade: hide right fade when scrolled to end */
+        var bar=document.querySelector('.tab-bar');
+        function checkScroll(){{
+            if(!bar)return;
+            var atEnd=bar.scrollLeft+bar.clientWidth>=bar.scrollWidth-5;
+            bar.classList.toggle('scrolled-end',atEnd);
+        }}
+        if(bar){{
+            bar.addEventListener('scroll',checkScroll);
+            checkScroll();
+            /* Scroll active tab into view on load and tab change */
+            function scrollActiveTab(){{
+                var active=bar.querySelector('label[for="tab-'+location.hash.replace('#','')+'"]');
+                if(active)active.scrollIntoView({{behavior:'smooth',block:'nearest',inline:'center'}});
+            }}
+            scrollActiveTab();
+            window.addEventListener('hashchange',scrollActiveTab);
+        }}
     }})();
     (function(){{
         var table=document.getElementById('stats-table');
