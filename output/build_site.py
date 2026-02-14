@@ -631,8 +631,23 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
         net = pd.to_numeric(r.get("net_ranking"), errors="coerce")
         wins = pd.to_numeric(r.get("wins"), errors="coerce")
         losses = pd.to_numeric(r.get("losses"), errors="coerce")
+        road_wins = pd.to_numeric(r.get("road_wins"), errors="coerce")
+        road_losses = pd.to_numeric(r.get("road_losses"), errors="coerce")
         if pd.isna(adj_oe) or pd.isna(adj_de) or pd.isna(barthag):
             continue
+        # Compute HCA score (same formula as _build_homecourt_tab)
+        hca_val = 0.0
+        if pd.notna(wins) and pd.notna(road_wins) and pd.notna(losses) and pd.notna(road_losses):
+            hw = wins - road_wins
+            hl = losses - road_losses
+            hg = hw + hl
+            rg = road_wins + road_losses
+            if hg >= 3 and rg >= 3:
+                home_wp = hw / hg
+                road_wp = road_wins / rg
+                dominance = home_wp - road_wp
+                quality = max(0.0, 1 - float(net) / 200) if pd.notna(net) else 0.0
+                hca_val = dominance * 0.65 + quality * 0.35
         espn_id = _ESPN_LOGOS.get(str(r.get("school_id", "")), "")
         teams_json.append({
             "name": str(r.get("team", "")),
@@ -644,6 +659,7 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
             "pace": round(float(pace), 1) if pd.notna(pace) else None,
             "net": int(net) if pd.notna(net) else 999,
             "rec": f"{int(wins)}-{int(losses)}" if pd.notna(wins) and pd.notna(losses) else "",
+            "hca": round(hca_val, 3),
         })
 
     teams_json.sort(key=lambda t: t["net"])
@@ -2304,10 +2320,18 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
             var ptsA=(a.oe+b.de)/2*posFactor;
             var ptsB=(b.oe+a.de)/2*posFactor;
-            /* Home court advantage */
+            /* Home court advantage scaled by team's HCA score from Home Court rankings.
+               HCA score ~0.67 (top) → ~5 pts, ~0.3 (mid) → ~3 pts, ~0 (bottom) → ~1 pt */
             if(homeId){{
-                if(String(homeId)===String(a.espn)){{ptsA+=1.75;ptsB-=1.75;}}
-                else if(String(homeId)===String(b.espn)){{ptsB+=1.75;ptsA-=1.75;}}
+                var homeTeam=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
+                if(homeTeam){{
+                    var h=homeTeam.hca||0;
+                    var pts=h*6+1; /* 0→1pt, 0.33→3pt, 0.67→5pt */
+                    if(pts<0.5)pts=0.5;
+                    var half=pts/2;
+                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
+                    else{{ptsB+=half;ptsA-=half;}}
+                }}
             }}
             var spread=ptsA-ptsB;
             var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
