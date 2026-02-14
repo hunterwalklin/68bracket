@@ -627,6 +627,7 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
         adj_oe = pd.to_numeric(r.get("adj_oe"), errors="coerce")
         adj_de = pd.to_numeric(r.get("adj_de"), errors="coerce")
         barthag = pd.to_numeric(r.get("barthag"), errors="coerce")
+        pace = pd.to_numeric(r.get("pace"), errors="coerce")
         net = pd.to_numeric(r.get("net_ranking"), errors="coerce")
         wins = pd.to_numeric(r.get("wins"), errors="coerce")
         losses = pd.to_numeric(r.get("losses"), errors="coerce")
@@ -640,6 +641,7 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
             "oe": round(float(adj_oe), 1),
             "de": round(float(adj_de), 1),
             "bar": round(float(barthag), 4),
+            "pace": round(float(pace), 1) if pd.notna(pace) else None,
             "net": int(net) if pd.notna(net) else 999,
             "rec": f"{int(wins)}-{int(losses)}" if pd.notna(wins) and pd.notna(losses) else "",
         })
@@ -649,6 +651,13 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
     blob = _json.dumps(teams_json, separators=(",", ":"))
 
     return f'<div id="scores-app"></div><script>window.__SCORES_TEAMS__={blob};</script>'
+
+
+def _build_schedule_tab(stats_df: pd.DataFrame) -> str:
+    """Build the Schedule tab container. All logic is client-side JS."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Schedule data not available. Run the predict command to generate.</p>'
+    return '<div id="schedule-app"></div>'
 
 
 def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
@@ -768,7 +777,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1206,6 +1215,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-schedule:checked ~ .tab-bar label[for="tab-schedule"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
@@ -1214,6 +1227,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-matrix:checked ~ #panel-matrix {{ display: block; }}
         #tab-ranking:checked ~ #panel-ranking {{ display: block; }}
         #tab-scores:checked ~ #panel-scores {{ display: block; }}
+        #tab-schedule:checked ~ #panel-schedule {{ display: block; }}
 
         /* Scores tab — interactive picker */
         .scores-picker {{
@@ -1390,6 +1404,141 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--text-muted);
             margin-bottom: 0.3rem;
         }}
+        /* Schedule tab */
+        .sched-nav {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }}
+        .sched-nav button {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.15s, border-color 0.15s;
+        }}
+        .sched-nav button:hover {{
+            border-color: var(--accent);
+            color: var(--accent);
+        }}
+        .sched-nav .sched-date {{
+            font-size: 1.1rem;
+            font-weight: 700;
+            min-width: 200px;
+            text-align: center;
+        }}
+        .sched-summary {{
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+        }}
+        .sched-game {{
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.15s;
+        }}
+        .sched-game:hover {{
+            border-color: var(--accent);
+        }}
+        .sched-live {{
+            border-color: var(--green);
+            border-width: 2px;
+        }}
+        .sched-team {{
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }}
+        .sched-team.away {{
+            justify-content: flex-end;
+            text-align: right;
+        }}
+        .sched-team.home {{
+            justify-content: flex-start;
+            text-align: left;
+        }}
+        .sched-team img {{
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+        }}
+        .sched-team-info {{
+            display: flex;
+            flex-direction: column;
+        }}
+        .sched-team-name {{
+            font-weight: 700;
+            font-size: 0.95rem;
+        }}
+        .sched-team-meta {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }}
+        .sched-center {{
+            text-align: center;
+            min-width: 100px;
+        }}
+        .sched-score {{
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }}
+        .sched-score .sched-winner {{
+            color: var(--accent);
+        }}
+        .sched-time {{
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.15rem;
+        }}
+        .sched-pred {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }}
+        .sched-live-badge {{
+            display: inline-block;
+            background: var(--green);
+            color: var(--bg);
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+        }}
+        .sched-watch {{
+            position: absolute;
+            top: 0.5rem;
+            right: 0.65rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }}
+        .sched-game {{
+            position: relative;
+        }}
+        .sched-loading {{
+            text-align: center;
+            color: var(--text-muted);
+            padding: 3rem 1rem;
+            font-size: 0.95rem;
+        }}
+
         @media (max-width: 600px) {{
             .scores-picker {{
                 flex-direction: column;
@@ -1574,6 +1723,17 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             .seed-table td {{ padding: 0.4rem 0.5rem; font-size: 0.85rem; }}
             .bubble-row {{ flex-direction: column; gap: 0.4rem; }}
             .bubble-label {{ min-width: auto; }}
+            .sched-game {{
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+                text-align: center;
+            }}
+            .sched-team.away, .sched-team.home {{
+                justify-content: center;
+                text-align: center;
+            }}
+            .sched-team img {{ width: 24px; height: 24px; }}
+            .sched-nav .sched-date {{ min-width: 160px; font-size: 0.95rem; }}
         }}
     </style>
 </head>
@@ -1593,11 +1753,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-matrix" class="tab-radio">
         <input type="radio" name="tabs" id="tab-ranking" class="tab-radio">
         <input type="radio" name="tabs" id="tab-scores" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-schedule" class="tab-radio">
 
         <div class="tab-bar">
             <label for="tab-bracket">Bracket</label>
             <label for="tab-ranking">Power Rankings</label>
             <label for="tab-scores">Scores</label>
+            <label for="tab-schedule">Schedule</label>
             <label for="tab-bubble">Bubble Watch</label>
             <label for="tab-autobid">Auto Bids</label>
             <label for="tab-matrix">Bracket Matrix</label>
@@ -1668,12 +1830,34 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             {scores_tab_html if scores_tab_html else '<p style="color: var(--text-muted);">Scores data not available. Run the predict command to generate.</p>'}
         </div>
 
+        <div id="panel-schedule" class="tab-panel">
+            <h2>Schedule</h2>
+            {schedule_tab_html if schedule_tab_html else '<p style="color: var(--text-muted);">Schedule data not available. Run the predict command to generate.</p>'}
+        </div>
+
         <div class="footnote">
             Predictions generated by <a href="https://github.com/hunterwalklin/68bracket">68bracket</a>
             — updated daily
         </div>
     </div>
     <script>
+    /* Tab persistence via URL hash */
+    (function(){{
+        var radios=document.querySelectorAll('.tab-radio');
+        function setTab(){{
+            var h=location.hash.replace('#','');
+            if(!h)return;
+            var r=document.getElementById('tab-'+h);
+            if(r)r.checked=true;
+        }}
+        setTab();
+        window.addEventListener('hashchange',setTab);
+        radios.forEach(function(r){{
+            r.addEventListener('change',function(){{
+                if(this.checked)location.hash=this.id.replace('tab-','');
+            }});
+        }});
+    }})();
     (function(){{
         var table=document.getElementById('stats-table');
         if(!table)return;
@@ -1926,17 +2110,17 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             if(!sel[0]||!sel[1]){{res.classList.remove('visible');return;}}
             var a=sel[0],b=sel[1];
 
-            /* AdjEM spread */
+            /* AdjEM spread — use pace if available */
+            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
             var emA=a.oe-a.de, emB=b.oe-b.de;
-            var spread=(emA-emB)*0.68;
+            var spread=(emA-emB)*posFactor;
 
             /* Apply home court advantage */
             if(venue==='homeA')spread+=HCA;
             else if(venue==='homeB')spread-=HCA;
 
             /* Convert spread to win probability using logistic function */
-            /* sigma = 11 gives roughly KenPom-calibrated results */
-            var winA=1/(1+Math.pow(10,-spread/(11*0.68)));
+            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
             var winB=1-winA;
 
             var pctA=(winA*100).toFixed(1);
@@ -1964,10 +2148,313 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 +'<span>AdjDE<span class="sd-val">'+a.de+' / '+b.de+'</span></span>'
                 +'<span>AdjEM<span class="sd-val">'+emA.toFixed(1)+' / '+emB.toFixed(1)+'</span></span>'
                 +'<span>Barthag<span class="sd-val">'+a.bar.toFixed(4)+' / '+b.bar.toFixed(4)+'</span></span>'
+                +'<span>Pace<span class="sd-val">'+(a.pace||'—')+' / '+(b.pace||'—')+'</span></span>'
                 +'<span>NET<span class="sd-val">'+a.net+' / '+b.net+'</span></span>'
                 +'</div>';
             res.classList.add('visible');
         }}
+    }})();
+    /* Schedule tab */
+    (function(){{
+        var app=document.getElementById('schedule-app');
+        if(!app||!window.__SCORES_TEAMS__)return;
+        var teams=window.__SCORES_TEAMS__;
+        var CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
+        var API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
+        var cache={{}};
+        var loaded=false;
+        var currentDate=null;
+
+        /* Build ESPN ID lookup */
+        var byEspn={{}};
+        teams.forEach(function(t){{if(t.espn)byEspn[String(t.espn)]=t;}});
+
+        function pad(n){{return n<10?'0'+n:''+n;}}
+        function fmtDate(d){{return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());}}
+        function displayDate(d){{
+            var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();
+        }}
+
+        function predict(a,b,homeId){{
+            if(!a||!b)return null;
+            /* Use average pace if both teams have it, else fall back to 0.68 constant */
+            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
+            var ptsA=(a.oe+b.de)/2*posFactor;
+            var ptsB=(b.oe+a.de)/2*posFactor;
+            /* Home court advantage */
+            if(homeId){{
+                if(String(homeId)===String(a.espn)){{ptsA+=1.75;ptsB-=1.75;}}
+                else if(String(homeId)===String(b.espn)){{ptsB+=1.75;ptsA-=1.75;}}
+            }}
+            var spread=ptsA-ptsB;
+            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
+            /* Watchability: competitiveness (60%) + team quality (40%) */
+            var comp=Math.max(0,1-Math.abs(spread)/20);
+            var avgNet=(a.net+b.net)/2;
+            var qual=Math.max(0,1-avgNet/200);
+            var watch=Math.round((comp*0.6+qual*0.4)*100);
+            var rA=Math.round(ptsA),rB=Math.round(ptsB);
+            if(rA===rB){{if(spread>=0)rA+=1;else rB+=1;}}
+            return {{ptsA:rA,ptsB:rB,spread:spread,winA:winA,watch:watch}};
+        }}
+
+        function logoUrl(espn){{return espn?CDN+espn+'.png&h=40&w=40':'';}}
+
+        function renderGames(data){{
+            var events=data.events||[];
+            var games=[];
+            events.forEach(function(ev){{
+                var comp=ev.competitions&&ev.competitions[0];
+                if(!comp)return;
+                var away=null,home=null;
+                (comp.competitors||[]).forEach(function(c){{
+                    if(c.homeAway==='away')away=c;
+                    else home=c;
+                }});
+                if(!away||!home)return;
+                var awayId=away.team&&away.team.id?String(away.team.id):'';
+                var homeId=home.team&&home.team.id?String(home.team.id):'';
+                var awayTeam=byEspn[awayId]||null;
+                var homeTeam=byEspn[homeId]||null;
+                var awayName=away.team&&away.team.displayName?away.team.displayName:(awayTeam?awayTeam.name:'TBD');
+                var homeName=home.team&&home.team.displayName?home.team.displayName:(homeTeam?homeTeam.name:'TBD');
+                var awayScore=away.score?parseInt(away.score):0;
+                var homeScore=home.score?parseInt(home.score):0;
+                var status=comp.status||{{}};
+                var statusType=status.type||{{}};
+                var state=statusType.state||'pre'; /* pre, in, post */
+                var detail=statusType.shortDetail||statusType.detail||'';
+                var startDate=comp.date||ev.date||'';
+                var pred=predict(awayTeam,homeTeam,homeId);
+                games.push({{
+                    awayName:awayName,homeName:homeName,
+                    awayId:awayId,homeId:homeId,
+                    awayTeam:awayTeam,homeTeam:homeTeam,
+                    awayLogo:away.team&&away.team.logo?away.team.logo:logoUrl(awayId),
+                    homeLogo:home.team&&home.team.logo?home.team.logo:logoUrl(homeId),
+                    awayScore:awayScore,homeScore:homeScore,
+                    state:state,detail:detail,
+                    startDate:startDate,
+                    pred:pred
+                }});
+            }});
+
+            /* Sort: live first, then by watchability (high to low), then unpredicted by time */
+            games.sort(function(a,b){{
+                var aOrd=a.state==='in'?0:(a.pred?1:2);
+                var bOrd=b.state==='in'?0:(b.pred?1:2);
+                if(aOrd!==bOrd)return aOrd-bOrd;
+                /* Within same tier, sort by watchability desc */
+                var aw=a.pred?a.pred.watch:0;
+                var bw=b.pred?b.pred.watch:0;
+                if(aw!==bw)return bw-aw;
+                return (a.startDate||'').localeCompare(b.startDate||'');
+            }});
+
+            var withPred=games.filter(function(g){{return g.pred!==null;}}).length;
+            var html='<div class="sched-summary">'+games.length+' games'+
+                (withPred>0?' &middot; '+withPred+' with predictions':'')+
+                '</div>';
+
+            games.forEach(function(g){{
+                var liveCls=g.state==='in'?' sched-live':'';
+                var awayImg=g.awayLogo?'<img src="'+g.awayLogo+'" alt="" loading="lazy">':'';
+                var homeImg=g.homeLogo?'<img src="'+g.homeLogo+'" alt="" loading="lazy">':'';
+                var awayMeta='',homeMeta='';
+                if(g.awayTeam)awayMeta=g.awayTeam.conf+' &middot; '+g.awayTeam.rec+' &middot; NET '+g.awayTeam.net;
+                if(g.homeTeam)homeMeta=g.homeTeam.conf+' &middot; '+g.homeTeam.rec+' &middot; NET '+g.homeTeam.net;
+
+                var centerHtml='';
+                if(g.state==='post'){{
+                    var awScoreCls=g.awayScore>g.homeScore?' sched-winner':'';
+                    var hmScoreCls=g.homeScore>g.awayScore?' sched-winner':'';
+                    centerHtml='<div class="sched-score"><span class="'+awScoreCls+'">'+g.awayScore+'</span> - <span class="'+hmScoreCls+'">'+g.homeScore+'</span></div>';
+                    centerHtml+='<div class="sched-time">Final</div>';
+                    if(g.pred){{
+                        var diff=Math.abs(g.pred.spread).toFixed(1);
+                        var favName=g.pred.spread>=0?g.awayName:g.homeName;
+                        var pct=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                        centerHtml+='<div class="sched-pred">Pred: '+g.pred.ptsA+'-'+g.pred.ptsB+' ('+favName+' '+pct+'%)</div>';
+                    }}
+                }}else if(g.state==='in'){{
+                    centerHtml='<div class="sched-score"><span>'+g.awayScore+'</span> - <span>'+g.homeScore+'</span></div>';
+                    centerHtml+='<div class="sched-time"><span class="sched-live-badge">LIVE</span> '+g.detail+'</div>';
+                    if(g.pred){{
+                        var diff2=Math.abs(g.pred.spread).toFixed(1);
+                        var favName2=g.pred.spread>=0?g.awayName:g.homeName;
+                        var pct2=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                        centerHtml+='<div class="sched-pred">Pred: '+g.pred.ptsA+'-'+g.pred.ptsB+' ('+favName2+' '+pct2+'%)</div>';
+                    }}
+                }}else{{
+                    /* Pre-game */
+                    if(g.pred){{
+                        centerHtml='<div class="sched-score">'+g.pred.ptsA+' - '+g.pred.ptsB+'</div>';
+                        var diff3=Math.abs(g.pred.spread).toFixed(1);
+                        var favName3=g.pred.spread>=0?g.awayName:g.homeName;
+                        var pct3=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                        centerHtml+='<div class="sched-pred">'+favName3+' '+pct3+'% &middot; '+favName3+' by '+diff3+'</div>';
+                    }}
+                    /* Show game time */
+                    if(g.detail){{
+                        centerHtml+='<div class="sched-time">'+g.detail+'</div>';
+                    }}else if(g.startDate){{
+                        try{{
+                            var d=new Date(g.startDate);
+                            var h=d.getHours(),m=d.getMinutes();
+                            var ampm=h>=12?'PM':'AM';
+                            h=h%12;if(h===0)h=12;
+                            centerHtml+='<div class="sched-time">'+h+':'+pad(m)+' '+ampm+'</div>';
+                        }}catch(e){{}}
+                    }}
+                }}
+
+                /* Watchability badge */
+                var watchHtml='';
+                if(g.pred&&g.pred.watch!=null){{
+                    var w=g.pred.watch;
+                    var hue=Math.round(w*1.2); /* 0=red, 60=yellow, 100+=green */
+                    watchHtml='<div class="sched-watch" style="color:hsl('+hue+',70%,50%)" title="Watchability: '+w+'/100">'+w+'</div>';
+                }}
+
+                html+='<div class="sched-game'+liveCls+'">'
+                    +watchHtml
+                    +'<div class="sched-team away">'
+                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.awayName+'</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
+                        +awayImg
+                    +'</div>'
+                    +'<div class="sched-center">'+centerHtml+'</div>'
+                    +'<div class="sched-team home">'
+                        +homeImg
+                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.homeName+'</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
+                    +'</div>'
+                    +'</div>';
+            }});
+
+            if(games.length===0){{
+                html='<div class="sched-summary">No games scheduled for this date.</div>';
+            }}
+
+            return html;
+        }}
+
+        function loadDate(dateStr){{
+            currentDate=dateStr;
+            var d=new Date(dateStr.slice(0,4)+'-'+dateStr.slice(4,6)+'-'+dateStr.slice(6,8)+'T12:00:00');
+            var navHtml='<div class="sched-nav">'
+                +'<button id="sched-prev">&larr; Prev</button>'
+                +'<button id="sched-today">Today</button>'
+                +'<div class="sched-date">'+displayDate(d)+'</div>'
+                +'<button id="sched-next">Next &rarr;</button>'
+                +'</div>';
+
+            if(cache[dateStr]){{
+                app.innerHTML=navHtml+renderGames(cache[dateStr]);
+                bindNav();
+                startAutoRefresh();
+                return;
+            }}
+
+            app.innerHTML=navHtml+'<div class="sched-loading">Loading games...</div>';
+            bindNav();
+
+            fetch(API+'?dates='+dateStr+'&limit=200&groups=50')
+                .then(function(r){{return r.json();}})
+                .then(function(data){{
+                    cache[dateStr]=data;
+                    if(currentDate===dateStr){{
+                        app.innerHTML=navHtml+renderGames(data);
+                        bindNav();
+                        startAutoRefresh();
+                    }}
+                }})
+                .catch(function(){{
+                    if(currentDate===dateStr){{
+                        app.innerHTML=navHtml+'<div class="sched-loading">Failed to load games. Try again later.</div>';
+                        bindNav();
+                    }}
+                }});
+        }}
+
+        function shiftDate(offset){{
+            var d=new Date(currentDate.slice(0,4)+'-'+currentDate.slice(4,6)+'-'+currentDate.slice(6,8)+'T12:00:00');
+            d.setDate(d.getDate()+offset);
+            loadDate(fmtDate(d));
+        }}
+
+        function bindNav(){{
+            var prev=document.getElementById('sched-prev');
+            var next=document.getElementById('sched-next');
+            var today=document.getElementById('sched-today');
+            if(prev)prev.onclick=function(){{shiftDate(-1);}};
+            if(next)next.onclick=function(){{shiftDate(1);}};
+            if(today)today.onclick=function(){{loadDate(fmtDate(new Date()));}};
+        }}
+
+        /* Auto-refresh for live games — 20s polling */
+        var refreshTimer=null;
+        var REFRESH_INTERVAL=20000;
+
+        function hasLiveGames(){{
+            var cached=cache[currentDate];
+            if(!cached||!cached.events)return false;
+            return cached.events.some(function(ev){{
+                var s=ev.competitions&&ev.competitions[0]&&ev.competitions[0].status;
+                return s&&s.type&&s.type.state==='in';
+            }});
+        }}
+
+        function refreshLive(){{
+            if(!currentDate)return;
+            var dateStr=currentDate;
+            delete cache[dateStr];
+            loadDate(dateStr);
+        }}
+
+        function startAutoRefresh(){{
+            stopAutoRefresh();
+            if(hasLiveGames()){{
+                refreshTimer=setInterval(refreshLive,REFRESH_INTERVAL);
+            }}
+        }}
+
+        function stopAutoRefresh(){{
+            if(refreshTimer){{clearInterval(refreshTimer);refreshTimer=null;}}
+        }}
+
+        /* Lazy load — fetch when Schedule tab is activated */
+        var schedRadio=document.getElementById('tab-schedule');
+        function initSchedule(){{
+            if(!loaded){{
+                loaded=true;
+                loadDate(fmtDate(new Date()));
+            }}else{{
+                startAutoRefresh();
+            }}
+        }}
+        if(schedRadio){{
+            schedRadio.addEventListener('change',function(){{
+                if(this.checked)initSchedule();
+                else stopAutoRefresh();
+            }});
+            /* If tab is already active on page load (hash restore) */
+            if(schedRadio.checked)initSchedule();
+        }}
+
+        /* Stop polling when switching to another tab */
+        document.querySelectorAll('.tab-radio').forEach(function(r){{
+            if(r.id!=='tab-schedule'){{
+                r.addEventListener('change',function(){{stopAutoRefresh();}});
+            }}
+        }});
+
+        /* Keyboard navigation */
+        document.addEventListener('keydown',function(e){{
+            if(!schedRadio||!schedRadio.checked)return;
+            if(e.key==='ArrowLeft')shiftDate(-1);
+            else if(e.key==='ArrowRight')shiftDate(1);
+        }});
     }})();
     </script>
 </body>
@@ -2061,9 +2548,14 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
     if stats_df is not None:
         scores_tab_html = _build_scores_tab(stats_df)
 
+    # Build schedule tab
+    schedule_tab_html = ""
+    if stats_df is not None:
+        schedule_tab_html = _build_schedule_tab(stats_df)
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
