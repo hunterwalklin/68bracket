@@ -1561,6 +1561,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             font-size: 0.75rem;
             color: var(--text-muted);
         }}
+        .sched-venue-tag {{
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }}
         .sched-center {{
             text-align: center;
             min-width: 100px;
@@ -2434,13 +2442,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 html+='<div class="sched-game'+liveCls+'">'
                     +watchHtml
                     +'<div class="sched-team away">'
-                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.awayName+'</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.awayName+'</div><div class="sched-venue-tag">Away</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
                         +awayImg
                     +'</div>'
                     +'<div class="sched-center">'+centerHtml+'</div>'
                     +'<div class="sched-team home">'
                         +homeImg
-                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.homeName+'</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.homeName+'</div><div class="sched-venue-tag">Home</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
                     +'</div>'
                     +'</div>';
             }});
