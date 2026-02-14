@@ -197,7 +197,7 @@ def cmd_predict(args):
     from output.bracket_builder import assign_regions, build_matchups, build_first_four
     from output.display import (
         display_seed_list, display_bracket,
-        display_selection_summary, generate_markdown,
+        display_selection_summary, display_homecourt, generate_markdown,
     )
 
     model_type = getattr(args, "model", "rf")
@@ -265,6 +265,7 @@ def cmd_predict(args):
     display_seed_list(bracket, season=season)
     display_selection_summary(bracket)
     display_bracket(bracket, season=season)
+    display_homecourt(all_with_probs)
 
     import json
 

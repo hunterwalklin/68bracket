@@ -179,6 +179,38 @@ def display_selection_summary(df: pd.DataFrame):
                 print(f"    {conf} ({count}): {', '.join(teams)}")
 
 
+def display_homecourt(stats_df: pd.DataFrame, top_n: int = 25):
+    """Print top home court advantage rankings."""
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    df["home_wins"] = df["wins"] - df["road_wins"]
+    df["home_losses"] = df["losses"] - df["road_losses"]
+    df["home_games"] = df["home_wins"] + df["home_losses"]
+    df["road_games"] = df["road_wins"] + df["road_losses"]
+
+    df = df[(df["home_games"] >= 3) & (df["road_games"] >= 3)].copy()
+
+    df["home_wp"] = df["home_wins"] / df["home_games"]
+    df["road_wp"] = df["road_wins"] / df["road_games"]
+    df["dominance"] = df["home_wp"] - df["road_wp"]
+    df["quality"] = (1 - df["net_ranking"] / 200).clip(lower=0)
+    df["hca_score"] = df["dominance"] * 0.65 + df["quality"] * 0.35
+
+    df = df.sort_values("hca_score", ascending=False).head(top_n).reset_index(drop=True)
+
+    print(f"\n  Home Court Rankings (Top {top_n}):")
+    print(f"  {'#':>3}  {'Team':<25} {'Conf':<12} {'Home':>6} {'Road':>6} {'Dom':>6} {'HCA':>6} {'NET':>4}")
+    print(f"  {'---':>3}  {'----':<25} {'----':<12} {'----':>6} {'----':>6} {'---':>6} {'---':>6} {'---':>4}")
+    for i, r in df.iterrows():
+        hw, hl = int(r["home_wins"]), int(r["home_losses"])
+        rw, rl = int(r["road_wins"]), int(r["road_losses"])
+        print(
+            f"  {i+1:3d}  {r['team']:<25} {r['conference']:<12} "
+            f"{hw:>2}-{hl:<2}  {rw:>2}-{rl:<2}  "
+            f"{r['dominance']:>5.3f}  {r['hca_score']:>5.3f}  {int(r['net_ranking']):>3d}"
+        )
+
+
 def generate_markdown(
     df: pd.DataFrame,
     season: int = PREDICTION_SEASON,

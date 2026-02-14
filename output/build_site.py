@@ -660,6 +660,74 @@ def _build_schedule_tab(stats_df: pd.DataFrame) -> str:
     return '<div id="schedule-app"></div>'
 
 
+def _build_homecourt_tab(stats_df: pd.DataFrame) -> str:
+    """Rank teams by home court advantage score."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Home Court data not available. Run the predict command to generate.</p>'
+
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    # Derive home record (home + neutral approx)
+    df["home_wins"] = df["wins"] - df["road_wins"]
+    df["home_losses"] = df["losses"] - df["road_losses"]
+    df["home_games"] = df["home_wins"] + df["home_losses"]
+    df["road_games"] = df["road_wins"] + df["road_losses"]
+
+    # Filter: at least 3 home and 3 road games
+    df = df[(df["home_games"] >= 3) & (df["road_games"] >= 3)].copy()
+
+    df["home_wp"] = df["home_wins"] / df["home_games"]
+    df["road_wp"] = df["road_wins"] / df["road_games"]
+    df["dominance"] = df["home_wp"] - df["road_wp"]
+    df["quality"] = (1 - df["net_ranking"] / 200).clip(lower=0)
+    df["hca_score"] = df["dominance"] * 0.65 + df["quality"] * 0.35
+
+    df = df.sort_values("hca_score", ascending=False).reset_index(drop=True)
+
+    score_min = df["hca_score"].min()
+    score_max = df["hca_score"].max()
+
+    rows = ""
+    for i, r in df.iterrows():
+        score = float(r["hca_score"])
+        if score_max != score_min:
+            t = (score - score_min) / (score_max - score_min)
+        else:
+            t = 0.5
+        hue = int(t * 120)
+        score_style = f"color: hsl({hue}, 70%, 50%);"
+
+        hw, hl = int(r["home_wins"]), int(r["home_losses"])
+        rw, rl = int(r["road_wins"]), int(r["road_losses"])
+
+        logo = _team_logo(str(r.get("school_id", "")))
+        rows += (
+            f"<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
+            f"<td>{escape(str(r.get('conference', '')))}</td>"
+            f"<td>{hw}-{hl}</td>"
+            f"<td>{rw}-{rl}</td>"
+            f"<td>{r['home_wp']:.3f}</td>"
+            f"<td>{r['road_wp']:.3f}</td>"
+            f"<td>{r['dominance']:.3f}</td>"
+            f"<td style='{score_style} font-weight:600;'>{score:.3f}</td>"
+            f"<td>{int(r['net_ranking'])}</td>"
+            f"</tr>\n"
+        )
+
+    return f"""<div class="stats-scroll"><table class="stats-table" id="homecourt-table">
+<thead><tr>
+    <th data-sort="num">#</th><th data-sort="str">Team</th><th data-sort="str">Conf</th>
+    <th data-sort="str">Home</th><th data-sort="str">Road</th>
+    <th data-sort="num">Home W%</th><th data-sort="num">Road W%</th>
+    <th data-sort="num">Dominance</th><th data-sort="num">HCA Score</th><th data-sort="num">NET</th>
+</tr></thead>
+<tbody>
+{rows}</tbody>
+</table></div>"""
+
+
 def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
     """Compute a weighted composite score and build an HTML rankings table."""
     if stats_df is None:
@@ -777,7 +845,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1219,6 +1287,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-homecourt:checked ~ .tab-bar label[for="tab-homecourt"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
@@ -1228,6 +1300,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-ranking:checked ~ #panel-ranking {{ display: block; }}
         #tab-scores:checked ~ #panel-scores {{ display: block; }}
         #tab-schedule:checked ~ #panel-schedule {{ display: block; }}
+        #tab-homecourt:checked ~ #panel-homecourt {{ display: block; }}
 
         /* Scores tab — interactive picker */
         .scores-picker {{
@@ -1754,12 +1827,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-ranking" class="tab-radio">
         <input type="radio" name="tabs" id="tab-scores" class="tab-radio">
         <input type="radio" name="tabs" id="tab-schedule" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-homecourt" class="tab-radio">
 
         <div class="tab-bar">
             <label for="tab-bracket">Bracket</label>
             <label for="tab-ranking">Power Rankings</label>
             <label for="tab-scores">Scores</label>
             <label for="tab-schedule">Schedule</label>
+            <label for="tab-homecourt">Home Court</label>
             <label for="tab-bubble">Bubble Watch</label>
             <label for="tab-autobid">Auto Bids</label>
             <label for="tab-matrix">Bracket Matrix</label>
@@ -1833,6 +1908,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-schedule" class="tab-panel">
             <h2>Schedule</h2>
             {schedule_tab_html if schedule_tab_html else '<p style="color: var(--text-muted);">Schedule data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-homecourt" class="tab-panel">
+            <h2>Home Court Rankings</h2>
+            {homecourt_tab_html if homecourt_tab_html else '<p style="color: var(--text-muted);">Home Court data not available. Run the predict command to generate.</p>'}
         </div>
 
         <div class="footnote">
@@ -1926,6 +2006,39 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     }})();
     (function(){{
         var table=document.getElementById('autobid-table');
+        if(!table)return;
+        var thead=table.tHead, tbody=table.tBodies[0];
+        var ths=thead.rows[0].cells;
+        var curCol=-1, curAsc=true;
+        for(var i=0;i<ths.length;i++)(function(col){{
+            ths[col].addEventListener('click',function(){{
+                var asc=(col===curCol)?!curAsc:true;
+                var type=this.dataset.sort||'str';
+                var rows=Array.from(tbody.rows);
+                rows.sort(function(a,b){{
+                    var av,bv;
+                    if(type==='sv'){{
+                        av=parseFloat(a.cells[col].dataset.sv)||0;
+                        bv=parseFloat(b.cells[col].dataset.sv)||0;
+                    }}else if(type==='num'){{
+                        av=parseFloat(a.cells[col].textContent);if(isNaN(av))av=9999;
+                        bv=parseFloat(b.cells[col].textContent);if(isNaN(bv))bv=9999;
+                    }}else{{
+                        av=a.cells[col].textContent.toLowerCase();
+                        bv=b.cells[col].textContent.toLowerCase();
+                        return asc?av.localeCompare(bv):bv.localeCompare(av);
+                    }}
+                    return asc?av-bv:bv-av;
+                }});
+                for(var j=0;j<rows.length;j++)tbody.appendChild(rows[j]);
+                for(var k=0;k<ths.length;k++)ths[k].classList.remove('sort-asc','sort-desc');
+                this.classList.add(asc?'sort-asc':'sort-desc');
+                curCol=col;curAsc=asc;
+            }});
+        }})(i);
+    }})();
+    (function(){{
+        var table=document.getElementById('homecourt-table');
         if(!table)return;
         var thead=table.tHead, tbody=table.tBodies[0];
         var ths=thead.rows[0].cells;
@@ -2553,9 +2666,14 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
     if stats_df is not None:
         schedule_tab_html = _build_schedule_tab(stats_df)
 
+    # Build home court tab
+    homecourt_tab_html = ""
+    if stats_df is not None:
+        homecourt_tab_html = _build_homecourt_tab(stats_df)
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
