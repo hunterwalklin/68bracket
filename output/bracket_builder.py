@@ -260,27 +260,12 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     df["region"] = ""
-    df["first_four"] = False
 
     sort_col = "raw_seed" if "raw_seed" in df.columns else "selection_prob"
     ascending = sort_col == "raw_seed"
 
     # ------------------------------------------------------------------
-    # Step 1: Identify First Four teams
-    #   Seed 11: last 4 at-large → First Four
-    #   Seed 16: last 4 auto-bids → First Four
-    #   Within each FF seed, the 2 best (by raw_seed) go direct, rest are FF.
-    # ------------------------------------------------------------------
-    for ff_seed in (11, 16):
-        seed_teams = df[df["predicted_seed"] == ff_seed].sort_values(
-            sort_col, ascending=ascending,
-        )
-        if len(seed_teams) > 4:
-            for idx in seed_teams.index[2:]:
-                df.loc[idx, "first_four"] = True
-
-    # ------------------------------------------------------------------
-    # Step 2: Build S-curve slot list for the 64 direct-placement teams
+    # Step 1: Build S-curve slot list for the 64 direct-placement teams
     # ------------------------------------------------------------------
     slots = []
     for seed in SEEDS:
@@ -300,28 +285,28 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
             })
 
     # ------------------------------------------------------------------
-    # Step 3: Conference separation at seeds 1-4 (hard)
+    # Step 2: Conference separation at seeds 1-4 (hard)
     # ------------------------------------------------------------------
     _enforce_conference_separation(slots)
 
     # ------------------------------------------------------------------
-    # Step 4: Conference meeting avoidance at seeds 5-16 (soft)
+    # Step 3: Conference meeting avoidance at seeds 5-16 (soft)
     # ------------------------------------------------------------------
     _reduce_conference_meetings(slots)
 
     # ------------------------------------------------------------------
-    # Step 5: Geographic optimization (soft)
+    # Step 4: Geographic optimization (soft)
     # ------------------------------------------------------------------
     _optimize_geography(slots)
 
     # ------------------------------------------------------------------
-    # Step 6: Apply region assignments for direct teams
+    # Step 5: Apply region assignments for direct teams
     # ------------------------------------------------------------------
     for s in slots:
         df.loc[s["idx"], "region"] = REGIONS[s["region"]]
 
     # ------------------------------------------------------------------
-    # Step 7: Assign First Four teams to their regions
+    # Step 6: Assign First Four teams to their regions
     #   Each FF seed has 2 direct teams occupying 2 regions.
     #   The 4 FF teams form 2 games, each playing into one of the
     #   remaining 2 region slots.

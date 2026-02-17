@@ -46,33 +46,44 @@ class SeedingModel:
     def assign_seeds(self, df: pd.DataFrame) -> pd.DataFrame:
         """Assign constrained seeds to the 68-team field.
 
-        Ensures exactly TEAMS_PER_SEED teams at each seed line.
-        (4 per seed, 6 at seeds 11 and 16 for First Four)
+        NCAA First Four rules:
+        - Seed 11 First Four = 4 weakest at-large teams
+        - Seed 16 First Four = 4 weakest auto-bid teams
+        - Remaining 60 teams get 4 per seed at every line (1-16)
         """
         df = df.copy()
         df["raw_seed"] = self.predict_raw(df)
-
-        # Clip to valid range
         df["raw_seed"] = df["raw_seed"].clip(1, 16)
+        df["first_four"] = False
 
-        # Sort by raw seed prediction
-        df = df.sort_values("raw_seed").reset_index(drop=True)
+        # Split by selection method
+        at_large = df[df["selection_method"] == "at_large"].sort_values("raw_seed")
+        auto_bid = df[df["selection_method"] == "auto_bid"].sort_values("raw_seed")
 
-        # Assign constrained seeds
+        # 4 weakest at-large → seed 11 First Four
+        ff_at_large_idx = at_large.index[-4:]
+        df.loc[ff_at_large_idx, "first_four"] = True
+        df.loc[ff_at_large_idx, "predicted_seed"] = 11
+
+        # 4 weakest auto-bid → seed 16 First Four
+        ff_auto_bid_idx = auto_bid.index[-4:]
+        df.loc[ff_auto_bid_idx, "first_four"] = True
+        df.loc[ff_auto_bid_idx, "predicted_seed"] = 16
+
+        # Seed the remaining 60 teams: 4 per seed, except 2 at seeds 11/16
+        # (FF winners fill the other 2 region slots at those seed lines)
+        main_field = df[~df["first_four"]].sort_values("raw_seed")
+        main_indices = main_field.index.tolist()
         assigned_seeds = []
-        idx = 0
         for seed in SEEDS:
-            n_teams = TEAMS_PER_SEED[seed]
-            for _ in range(n_teams):
-                if idx < len(df):
+            n = 2 if seed in (11, 16) else 4
+            for _ in range(n):
+                if len(assigned_seeds) < len(main_indices):
                     assigned_seeds.append(seed)
-                    idx += 1
 
-        # Pad if needed (shouldn't happen with 68 teams)
-        while len(assigned_seeds) < len(df):
-            assigned_seeds.append(16)
-
-        df["predicted_seed"] = assigned_seeds[:len(df)]
+        for i, orig_idx in enumerate(main_indices):
+            if i < len(assigned_seeds):
+                df.loc[orig_idx, "predicted_seed"] = assigned_seeds[i]
 
         return df
 

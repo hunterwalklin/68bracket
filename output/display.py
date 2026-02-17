@@ -124,13 +124,17 @@ def display_seed_list(df: pd.DataFrame, season: int = PREDICTION_SEASON):
         seed_teams = df[df["predicted_seed"] == seed].sort_values(
             "raw_seed" if "raw_seed" in df.columns else "selection_prob"
         )
-        teams_str = ", ".join(seed_teams["team"].tolist())
-        ff_marker = ""
-        if seed in [11, 16]:
-            n_ff = seed_teams["first_four"].sum() if "first_four" in seed_teams.columns else 0
-            if n_ff > 0:
-                ff_marker = f" (+{int(n_ff)} First Four)"
-        print(f"  {seed:2d}. {teams_str}{ff_marker}")
+        has_ff = "first_four" in seed_teams.columns and seed_teams["first_four"].any()
+        if has_ff:
+            direct = seed_teams[~seed_teams["first_four"]]
+            ff = seed_teams[seed_teams["first_four"]]
+            direct_str = ", ".join(direct["team"].tolist())
+            ff_str = ", ".join(ff["team"].tolist())
+            print(f"  {seed:2d}. {direct_str}")
+            print(f"      First Four: {ff_str}")
+        else:
+            teams_str = ", ".join(seed_teams["team"].tolist())
+            print(f"  {seed:2d}. {teams_str}")
 
 
 def display_bracket(df: pd.DataFrame, season: int = PREDICTION_SEASON):
@@ -232,15 +236,13 @@ def generate_markdown(
     ]
 
     for seed in SEEDS:
-        seed_teams = df[df["predicted_seed"] == seed].sort_values(
-            "raw_seed" if "raw_seed" in df.columns else "selection_prob"
-        )
-        teams = []
-        for _, row in seed_teams.iterrows():
-            name = row["team"]
-            if row.get("first_four", False):
-                name += "*"
-            teams.append(name)
+        sort_col = "raw_seed" if "raw_seed" in df.columns else "selection_prob"
+        seed_teams = df[df["predicted_seed"] == seed].sort_values(sort_col)
+        # List direct teams first, then First Four teams
+        direct = seed_teams[~seed_teams.get("first_four", False)]
+        ff = seed_teams[seed_teams.get("first_four", False)]
+        teams = direct["team"].tolist()
+        teams += [name + "*" for name in ff["team"].tolist()]
         lines.append(f"| {seed} | {', '.join(teams)} |")
 
     lines.extend(["", "*First Four play-in game", ""])
