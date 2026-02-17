@@ -57,10 +57,10 @@ jobs:
         run: python -m main build
 
       - name: Train models
-        run: python -m main train
+        run: python -m main train --model ensemble
 
       - name: Generate predictions and build site
-        run: python -m main predict
+        run: python -m main predict --model ensemble
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

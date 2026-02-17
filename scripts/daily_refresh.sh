@@ -15,7 +15,7 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-VENV="$PROJECT_DIR/.venv/bin/python3"
+VENV="$PROJECT_DIR/.venv/bin/python"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_FILE="$LOG_DIR/refresh_$(date +%Y%m%d_%H%M%S).log"
 
@@ -38,15 +38,15 @@ if [[ "$MODE" == "daily" ]]; then
     "$VENV" -m main build >> "$LOG_FILE" 2>&1
 
     log "Running: train models"
-    "$VENV" -m main train >> "$LOG_FILE" 2>&1
+    "$VENV" -m main train --model ensemble >> "$LOG_FILE" 2>&1
 
     log "Running: predict"
-    "$VENV" -m main predict >> "$LOG_FILE" 2>&1
+    "$VENV" -m main predict --model ensemble >> "$LOG_FILE" 2>&1
 
     log "Daily refresh complete."
 elif [[ "$MODE" == "full" ]]; then
     log "Running: full pipeline (all seasons from scratch)"
-    "$VENV" -m main all >> "$LOG_FILE" 2>&1
+    "$VENV" -m main all --model ensemble >> "$LOG_FILE" 2>&1
     log "Full pipeline complete."
 else
     log "Unknown mode: $MODE (use 'daily' or 'full')"

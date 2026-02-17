@@ -204,6 +204,91 @@ def _build_conf_tab(stats_df) -> str:
 </table></div>"""
 
 
+def _build_standings_tab(stats_df) -> str:
+    """Generate HTML for conference standings with collapsible groups."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Standings data not available. Run the predict command to generate.</p>'
+
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    # Count projected bids per conference to determine sort order and expand state
+    conf_bids = df.groupby("conference")["selection_prob"].apply(lambda s: (s > 0.5).sum())
+
+    # Group by conference, sort conferences by bids descending
+    conferences = sorted(df["conference"].unique(), key=lambda c: -conf_bids.get(c, 0))
+
+    html = ""
+    for conf in conferences:
+        grp = df[df["conference"] == conf].copy()
+        bids = int(conf_bids.get(conf, 0))
+
+        # Rank by conf_win_pct desc, tiebreak by net_ranking asc
+        grp = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True]).reset_index(drop=True)
+
+        clogo = _conf_logo(conf)
+        bids_label = f"{bids} bid{'s' if bids != 1 else ''}" if bids > 0 else "0 bids"
+        open_attr = " open"
+
+        rows = ""
+        for i, r in grp.iterrows():
+            # Conference record
+            cw = r.get("conf_wins")
+            cl = r.get("conf_losses")
+            if pd.notna(cw) and pd.notna(cl):
+                conf_rec = f"{int(cw)}-{int(cl)}"
+            else:
+                conf_rec = "\u2014"
+
+            # Overall record
+            w, l = r.get("wins"), r.get("losses")
+            if pd.notna(w) and pd.notna(l):
+                overall_rec = f"{int(w)}-{int(l)}"
+            else:
+                overall_rec = "\u2014"
+
+            net = int(r["net_ranking"]) if pd.notna(r.get("net_ranking")) else "\u2014"
+
+            # Tournament status indicator
+            prob = r.get("selection_prob")
+            if pd.notna(prob):
+                prob_val = float(prob)
+                if prob_val > 0.5:
+                    status = '<span class="standing-status standing-in" title="Projected In">\u25cf</span>'
+                elif prob_val > 0.15:
+                    status = '<span class="standing-status standing-bubble" title="Bubble">\u25cf</span>'
+                else:
+                    status = ''
+            else:
+                status = ''
+
+            logo = _team_logo(str(r.get('school_id', '')))
+            rows += (
+                f"<tr>"
+                f"<td>{i + 1}</td>"
+                f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
+                f"<td>{conf_rec}</td>"
+                f"<td>{overall_rec}</td>"
+                f"<td>{net}</td>"
+                f"<td>{status}</td>"
+                f"</tr>\n"
+            )
+
+        table = f"""<table class="stats-table standings-table">
+<thead><tr>
+    <th>#</th><th>Team</th><th>Conf</th><th>Overall</th><th>NET</th><th></th>
+</tr></thead>
+<tbody>
+{rows}</tbody>
+</table>"""
+
+        html += f"""<details class="standings-conf"{open_attr}>
+<summary class="standings-summary">{clogo}<span class="standings-conf-name">{escape(conf)}</span><span class="standings-conf-meta">{bids_label}</span></summary>
+{table}
+</details>\n"""
+
+    return html
+
+
 def _build_autobid_tab(stats_df) -> str:
     """Generate an HTML table showing projected conference auto-bid winners."""
     if stats_df is None:
@@ -861,7 +946,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1313,6 +1398,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-standings:checked ~ .tab-bar label[for="tab-standings"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
@@ -1323,6 +1412,61 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-scores:checked ~ #panel-scores {{ display: block; }}
         #tab-schedule:checked ~ #panel-schedule {{ display: block; }}
         #tab-homecourt:checked ~ #panel-homecourt {{ display: block; }}
+        #tab-standings:checked ~ #panel-standings {{ display: block; }}
+
+        /* Standings tab — collapsible conference groups */
+        .standings-conf {{
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        .standings-summary {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1rem;
+            background: var(--surface);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            list-style: none;
+            user-select: none;
+        }}
+        .standings-summary::-webkit-details-marker {{ display: none; }}
+        .standings-summary::before {{
+            content: '\\25b6';
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            transition: transform 0.15s;
+        }}
+        details.standings-conf[open] > .standings-summary::before {{
+            transform: rotate(90deg);
+        }}
+        .standings-conf-name {{
+            flex: 1;
+        }}
+        .standings-conf-meta {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }}
+        .standings-table {{
+            border-radius: 0;
+        }}
+        .standings-table thead th {{
+            background: var(--surface);
+            border-bottom-color: var(--border);
+        }}
+        .standing-status {{
+            font-size: 0.7rem;
+        }}
+        .standing-in {{
+            color: var(--green);
+        }}
+        .standing-bubble {{
+            color: var(--accent);
+        }}
 
         /* Scores tab — interactive picker */
         .scores-picker {{
@@ -1858,6 +2002,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-scores" class="tab-radio">
         <input type="radio" name="tabs" id="tab-schedule" class="tab-radio">
         <input type="radio" name="tabs" id="tab-homecourt" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-standings" class="tab-radio">
 
         <div class="tab-bar">
             <label for="tab-bracket">Bracket</label>
@@ -1869,6 +2014,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <label for="tab-autobid">Auto Bids</label>
             <label for="tab-matrix">Bracket Matrix</label>
             <label for="tab-conf">Conferences</label>
+            <label for="tab-standings">Standings</label>
             <label for="tab-stats">Team Stats</label>
         </div>
 
@@ -1913,6 +2059,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-conf" class="tab-panel">
             <h2>Conference Rankings</h2>
             {conf_tab_html if conf_tab_html else '<p style="color: var(--text-muted);">Conference data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-standings" class="tab-panel">
+            <h2>Conference Standings</h2>
+            {standings_tab_html if standings_tab_html else '<p style="color: var(--text-muted);">Standings data not available. Run the predict command to generate.</p>'}
         </div>
 
         <div id="panel-autobid" class="tab-panel">
@@ -2673,10 +2824,12 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     stats_html = ""
     conf_tab_html = ""
+    standings_tab_html = ""
     autobid_tab_html = ""
     if stats_df is not None:
         stats_html = _build_stats_table(stats_df)
         conf_tab_html = _build_conf_tab(stats_df)
+        standings_tab_html = _build_standings_tab(stats_df)
         autobid_tab_html = _build_autobid_tab(stats_df)
 
     # Compute last_4_byes if missing (older bubble.json files lack this field)
@@ -2729,7 +2882,7 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
