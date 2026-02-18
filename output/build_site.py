@@ -710,6 +710,32 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
 
     has_kenpom = "hca_score" in stats_df.columns and stats_df["hca_score"].sum() > 0
 
+    # Load AP poll ranks for current week
+    ap_rank_lookup = {}
+    _AP_ALIASES = {
+        "UConn": "Connecticut",
+        "BYU": "Brigham Young",
+        "St. John's": "St. John's (NY)",
+        "UCF": "Central Florida",
+        "SMU": "Southern Methodist",
+        "LSU": "Louisiana State",
+        "USC": "Southern California",
+        "UNLV": "Nevada-Las Vegas",
+        "Ole Miss": "Mississippi",
+        "Pitt": "Pittsburgh",
+        "UNC": "North Carolina",
+    }
+    poll_path = os.path.join(PROCESSED_DIR, "ap_poll.json")
+    if os.path.exists(poll_path):
+        with open(poll_path, "r") as f:
+            poll = json.load(f)
+        cw = str(poll.get("current_week", ""))
+        week_data = poll.get("weeks", {}).get(cw, {})
+        for entry in week_data.get("ranks", []):
+            tn = entry.get("team_name", "")
+            if tn:
+                ap_rank_lookup[_AP_ALIASES.get(tn, tn)] = int(entry["rank"])
+
     # Build JSON blob of all teams with valid data
     df = stats_df[stats_df["net_ranking"] > 0].copy()
     teams_json = []
@@ -784,6 +810,7 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
             "wab": round(float(r.get("wab", 0) or 0), 1),
             "confW": int(r.get("conf_wins", 0) or 0),
             "confL": int(r.get("conf_losses", 0) or 0),
+            "apRank": ap_rank_lookup.get(str(r.get("team", "")), 0),
         }
 
         # Quadrant records
@@ -811,6 +838,35 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
     blob = _json.dumps(teams_json, separators=(",", ":"))
 
     return f'<div id="scores-app"></div><script>window.__SCORES_TEAMS__={blob};</script>'
+
+
+def _build_ap_poll_tab() -> str:
+    """Build the AP Top 25 poll tab with client-side week selector."""
+    poll_path = os.path.join(PROCESSED_DIR, "ap_poll.json")
+    if not os.path.exists(poll_path):
+        return ""
+
+    with open(poll_path, "r") as f:
+        poll = json.load(f)
+
+    weeks = poll.get("weeks", {})
+    if not weeks:
+        # Backwards compat: old single-week format
+        ranks = poll.get("ranks", [])
+        if not ranks:
+            return ""
+        weeks = {"1": {"week_label": "", "updated": poll.get("updated", ""), "ranks": ranks, "others": poll.get("others", [])}}
+        poll = {"season": PREDICTION_SEASON, "current_week": 1, "weeks": weeks}
+
+    import json as _json
+    blob = _json.dumps(poll, separators=(",", ":"))
+    logos_blob = _json.dumps(_ESPN_LOGOS, separators=(",", ":"))
+
+    return (
+        f'<div id="ap-poll-app"></div>'
+        f'<script>window.__AP_POLL_DATA__={blob};'
+        f'window.__ESPN_LOGOS__={logos_blob};</script>'
+    )
 
 
 def _build_summary_tab(stats_df: pd.DataFrame, changes: dict, bubble: dict | None, seed_rows: list | None = None) -> str:
@@ -1138,7 +1194,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", appoll_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1623,14 +1679,16 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-scores:checked ~ .tab-nav .tab-bar label[for="tab-scores"],
         #tab-homecourt:checked ~ .tab-nav .tab-bar label[for="tab-homecourt"],
         #tab-autobid:checked ~ .tab-nav .tab-bar label[for="tab-autobid"],
-        #tab-conf:checked ~ .tab-nav .tab-bar label[for="tab-conf"] {{
+        #tab-conf:checked ~ .tab-nav .tab-bar label[for="tab-conf"],
+        #tab-appoll:checked ~ .tab-nav .tab-bar label[for="tab-appoll"] {{
             color: var(--accent);
             font-weight: 700;
         }}
         #tab-scores:checked ~ .tab-nav .tab-more-btn,
         #tab-homecourt:checked ~ .tab-nav .tab-more-btn,
         #tab-autobid:checked ~ .tab-nav .tab-more-btn,
-        #tab-conf:checked ~ .tab-nav .tab-more-btn {{
+        #tab-conf:checked ~ .tab-nav .tab-more-btn,
+        #tab-appoll:checked ~ .tab-nav .tab-more-btn {{
             color: var(--accent);
             border-bottom: 2px solid var(--accent);
             margin-bottom: -2px;
@@ -1655,6 +1713,40 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-schedule:checked ~ #panel-schedule {{ display: block; }}
         #tab-homecourt:checked ~ #panel-homecourt {{ display: block; }}
         #tab-standings:checked ~ #panel-standings {{ display: block; }}
+        #tab-appoll:checked ~ #panel-appoll {{ display: block; }}
+
+        /* AP Poll tab styling */
+        .ap-week-select {{
+            display: inline-block;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.88rem;
+            font-family: inherit;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 0.75rem;
+        }}
+        .ap-week-select:focus {{ outline: 2px solid var(--accent); outline-offset: 1px; }}
+        .ap-subtitle {{ color: var(--text-muted); font-size: 0.82rem; margin: 0 0 0.75rem; }}
+        .ap-table td:first-child {{ font-weight: 700; width: 2.5rem; text-align: center; }}
+        .ap-fpv {{ color: var(--text-muted); font-size: 0.8em; }}
+        .ap-trend {{ font-size: 0.85em; font-weight: 600; }}
+        .ap-up {{ color: #22c55e; }}
+        .ap-down {{ color: #ef4444; }}
+        .ap-flat {{ color: var(--text-muted); }}
+        .ap-new {{ color: var(--accent); font-size: 0.75em; font-weight: 700; }}
+        .ap-others {{
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.88rem;
+            line-height: 1.8;
+        }}
+        .ap-others .team-logo {{ height: 20px; width: 20px; margin-right: 2px; vertical-align: middle; }}
 
         /* Standings tab — collapsible conference groups */
         .standings-conf {{
@@ -1930,6 +2022,21 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             min-width: 200px;
             text-align: center;
         }}
+        .sched-filter {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }}
+        .sched-filter:hover, .sched-filter:focus {{
+            border-color: var(--accent);
+            outline: none;
+        }}
         .sched-summary {{
             text-align: center;
             color: var(--text-muted);
@@ -1980,6 +2087,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         .sched-team-name {{
             font-weight: 700;
             font-size: 0.95rem;
+        }}
+        .sched-ap-rank {{
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-right: 0.2rem;
         }}
         .sched-team-meta {{
             font-size: 0.75rem;
@@ -2736,6 +2849,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-schedule" class="tab-radio">
         <input type="radio" name="tabs" id="tab-homecourt" class="tab-radio">
         <input type="radio" name="tabs" id="tab-standings" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-appoll" class="tab-radio">
 
         <div class="tab-nav">
             <div class="tab-bar">
@@ -2751,6 +2865,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <div class="tab-more">
                 <button class="tab-more-btn" type="button">More &#9662;</button>
                 <div class="tab-more-menu">
+                    <label for="tab-appoll">AP Poll</label>
                     <label for="tab-scores">Matchup Predictor</label>
                     <label for="tab-homecourt">Home Court</label>
                     <label for="tab-autobid">Auto Bids</label>
@@ -2841,6 +2956,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-homecourt" class="tab-panel">
             <h2>Home Court Rankings</h2>
             {homecourt_tab_html if homecourt_tab_html else '<p style="color: var(--text-muted);">Home Court data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-appoll" class="tab-panel">
+            <h2>AP Top 25 Poll</h2>
+            {appoll_tab_html if appoll_tab_html else '<p style="color: var(--text-muted);">AP Poll data not available. Run scrape to fetch latest rankings.</p>'}
         </div>
 
         <!-- Team Profile Modal -->
@@ -3255,10 +3375,17 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         var cache={{}};
         var loaded=false;
         var currentDate=null;
+        var currentFilter='all';
+        var POWER_CONFS=['ACC','Big 12','Big East','Big Ten','SEC'];
 
-        /* Build ESPN ID lookup */
+        /* Build ESPN ID lookup + conference list */
         var byEspn={{}};
-        teams.forEach(function(t){{if(t.espn)byEspn[String(t.espn)]=t;}});
+        var confSet={{}};
+        teams.forEach(function(t){{
+            if(t.espn)byEspn[String(t.espn)]=t;
+            if(t.conf)confSet[t.conf]=true;
+        }});
+        var confList=Object.keys(confSet).sort();
 
         function pad(n){{return n<10?'0'+n:''+n;}}
         function fmtDate(d){{return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());}}
@@ -3298,6 +3425,33 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
 
         function logoUrl(espn){{return espn?CDN+espn+'.png&h=40&w=40':'';}}
+
+        function filterGames(games){{
+            if(currentFilter==='all')return games;
+            return games.filter(function(g){{
+                if(currentFilter==='top25'){{
+                    return (g.awayTeam&&g.awayTeam.net<=25)||(g.homeTeam&&g.homeTeam.net<=25);
+                }}
+                if(currentFilter==='power'){{
+                    return (g.awayTeam&&POWER_CONFS.indexOf(g.awayTeam.conf)!==-1)||(g.homeTeam&&POWER_CONFS.indexOf(g.homeTeam.conf)!==-1);
+                }}
+                /* Conference filter */
+                return (g.awayTeam&&g.awayTeam.conf===currentFilter)||(g.homeTeam&&g.homeTeam.conf===currentFilter);
+            }});
+        }}
+
+        function buildFilterSelect(){{
+            var s='<select class="sched-filter" id="sched-filter">';
+            s+='<option value="all"'+(currentFilter==='all'?' selected':'')+'>All Games</option>';
+            s+='<option value="top25"'+(currentFilter==='top25'?' selected':'')+'>Top 25</option>';
+            s+='<option value="power"'+(currentFilter==='power'?' selected':'')+'>Power Conferences</option>';
+            s+='<optgroup label="Conferences">';
+            confList.forEach(function(c){{
+                s+='<option value="'+c+'"'+(currentFilter===c?' selected':'')+'>'+c+'</option>';
+            }});
+            s+='</optgroup></select>';
+            return s;
+        }}
 
         function renderGames(data){{
             var events=data.events||[];
@@ -3350,8 +3504,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 return (a.startDate||'').localeCompare(b.startDate||'');
             }});
 
+            var totalGames=games.length;
+            games=filterGames(games);
+
             var withPred=games.filter(function(g){{return g.pred!==null;}}).length;
-            var html='<div class="sched-summary">'+games.length+' games'+
+            var html='<div class="sched-summary">'+(currentFilter!=='all'?games.length+' of '+totalGames+' games':games.length+' games')+
                 (withPred>0?' &middot; '+withPred+' with predictions':'')+
                 '</div>';
 
@@ -3419,22 +3576,24 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var homeDataTeam=g.homeTeam?g.homeTeam.name:'';
                 var awayTeamCls=awayDataTeam?'sched-team-name stats-team':'sched-team-name';
                 var homeTeamCls=homeDataTeam?'sched-team-name stats-team':'sched-team-name';
+                var awayRank=g.awayTeam&&g.awayTeam.apRank?'<span class="sched-ap-rank">#'+g.awayTeam.apRank+'</span>':'';
+                var homeRank=g.homeTeam&&g.homeTeam.apRank?'<span class="sched-ap-rank">#'+g.homeTeam.apRank+'</span>':'';
                 html+='<div class="sched-game'+liveCls+'">'
                     +watchHtml
                     +'<div class="sched-team away">'
-                        +'<div class="sched-team-info"><div class="'+awayTeamCls+'"'+(awayDataTeam?' data-team="'+awayDataTeam+'"':'')+'>'+g.awayName+'</div><div class="sched-venue-tag">Away</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="'+awayTeamCls+'"'+(awayDataTeam?' data-team="'+awayDataTeam+'"':'')+'>'+awayRank+g.awayName+'</div><div class="sched-venue-tag">Away</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
                         +awayImg
                     +'</div>'
                     +'<div class="sched-center">'+centerHtml+'</div>'
                     +'<div class="sched-team home">'
                         +homeImg
-                        +'<div class="sched-team-info"><div class="'+homeTeamCls+'"'+(homeDataTeam?' data-team="'+homeDataTeam+'"':'')+'>'+g.homeName+'</div><div class="sched-venue-tag">Home</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="'+homeTeamCls+'"'+(homeDataTeam?' data-team="'+homeDataTeam+'"':'')+'>'+homeRank+g.homeName+'</div><div class="sched-venue-tag">Home</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
                     +'</div>'
                     +'</div>';
             }});
 
             if(games.length===0){{
-                html='<div class="sched-summary">No games scheduled for this date.</div>';
+                html='<div class="sched-summary">'+(currentFilter!=='all'&&totalGames>0?'No games match the current filter ('+totalGames+' total).':'No games scheduled for this date.')+'</div>';
             }}
 
             return html;
@@ -3448,6 +3607,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 +'<button id="sched-today">Today</button>'
                 +'<div class="sched-date">'+displayDate(d)+'</div>'
                 +'<button id="sched-next">Next &rarr;</button>'
+                +buildFilterSelect()
                 +'</div>';
 
             if(cache[dateStr]){{
@@ -3488,9 +3648,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var prev=document.getElementById('sched-prev');
             var next=document.getElementById('sched-next');
             var today=document.getElementById('sched-today');
+            var filter=document.getElementById('sched-filter');
             if(prev)prev.onclick=function(){{shiftDate(-1);}};
             if(next)next.onclick=function(){{shiftDate(1);}};
             if(today)today.onclick=function(){{loadDate(fmtDate(new Date()));}};
+            if(filter)filter.onchange=function(){{
+                currentFilter=this.value;
+                if(cache[currentDate])loadDate(currentDate);
+            }};
         }}
 
         /* Auto-refresh for live games — 20s polling */
@@ -4734,6 +4899,98 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             openProfile(name);
         }});
     }})();
+    /* AP Poll week selector */
+    (function(){{
+        var app=document.getElementById('ap-poll-app');
+        if(!app||!window.__AP_POLL_DATA__)return;
+        var D=window.__AP_POLL_DATA__;
+        var weeks=D.weeks||{{}};
+        var curWeek=D.current_week||1;
+        var keys=Object.keys(weeks).map(Number).sort(function(a,b){{return a-b;}});
+        if(!keys.length)return;
+
+        function esc(s){{var d=document.createElement('div');d.textContent=s;return d.innerHTML;}}
+        function logoImg(sid){{
+            if(!sid||!window.__ESPN_LOGOS__)return '';
+            var eid=window.__ESPN_LOGOS__[sid];
+            if(!eid)return '';
+            return '<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/'+eid+'.png&h=40&w=40" alt="" loading="lazy">';
+        }}
+
+        function render(weekNum){{
+            var w=weeks[String(weekNum)];
+            if(!w)return;
+            var ranks=w.ranks||[];
+            var others=w.others||[];
+            var label=w.week_label||('Week '+weekNum);
+            var updated=w.updated||'';
+
+            var subtitle=updated?'<p class="ap-subtitle">'+esc(label)+' &mdash; '+esc(updated)+'. Points are AP voter ballots (first-place votes in parentheses).</p>':'';
+
+            var rows='';
+            for(var i=0;i<ranks.length;i++){{
+                var e=ranks[i];
+                var rank=e.rank;
+                var prev=e.previous||0;
+                var logo=logoImg(e.school_id);
+                var name=esc(e.team_name||'');
+                var record=esc(e.record||'');
+                var pts=parseInt(e.points)||0;
+                var fpv=parseInt(e.first_place_votes)||0;
+                var ptsStr=String(pts);
+                if(fpv)ptsStr+=' <span class="ap-fpv">('+fpv+')</span>';
+
+                var trend;
+                if(prev===0)trend='<span class="ap-trend ap-new">NEW</span>';
+                else if(rank<prev)trend='<span class="ap-trend ap-up">\u25b2'+(prev-rank)+'</span>';
+                else if(rank>prev)trend='<span class="ap-trend ap-down">\u25bc'+(rank-prev)+'</span>';
+                else trend='<span class="ap-trend ap-flat">\u2014</span>';
+
+                var teamCell='<span class="stats-team" data-team="'+name+'">'+logo+name+'</span>';
+                rows+='<tr><td>'+rank+'</td><td>'+teamCell+'</td><td>'+record+'</td><td>'+ptsStr+'</td><td>'+trend+'</td></tr>';
+            }}
+
+            var table='<div class="stats-scroll"><table class="stats-table ap-table">'
+                +'<thead><tr><th data-sort="num">#</th><th data-sort="str">Team</th><th data-sort="str">Record</th>'
+                +'<th data-sort="num">Points</th><th data-sort="num">Trend</th></tr></thead>'
+                +'<tbody>'+rows+'</tbody></table></div>';
+
+            var othersHtml='';
+            if(others.length){{
+                others.sort(function(a,b){{return (b.points||0)-(a.points||0);}});
+                var items=[];
+                for(var j=0;j<others.length;j++){{
+                    var o=others[j];
+                    var oLogo=logoImg(o.school_id);
+                    var oName=esc(o.team_name||'');
+                    items.push(oLogo+'<span class="stats-team" data-team="'+oName+'">'+oName+'</span> '+parseInt(o.points||0));
+                }}
+                othersHtml='<div class="ap-others"><strong>Others receiving votes:</strong> '+items.join(', ')+'</div>';
+            }}
+
+            var container=document.getElementById('ap-poll-content');
+            if(container)container.innerHTML=subtitle+table+othersHtml;
+        }}
+
+        /* Build select dropdown */
+        var sel=document.createElement('select');
+        sel.className='ap-week-select';
+        for(var k=keys.length-1;k>=0;k--){{
+            var opt=document.createElement('option');
+            opt.value=keys[k];
+            var wData=weeks[String(keys[k])];
+            opt.textContent=wData.week_label||('Week '+keys[k]);
+            if(keys[k]===curWeek)opt.selected=true;
+            sel.appendChild(opt);
+        }}
+        sel.addEventListener('change',function(){{render(parseInt(this.value));}});
+
+        var content=document.createElement('div');
+        content.id='ap-poll-content';
+        app.appendChild(sel);
+        app.appendChild(content);
+        render(curWeek);
+    }})();
     </script>
 </body>
 </html>"""
@@ -4843,9 +5100,12 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
     if stats_df is not None:
         summary_tab_html = _build_summary_tab(stats_df, changes, bubble, seed_rows_for_matrix)
 
+    # Build AP Poll tab
+    appoll_tab_html = _build_ap_poll_tab()
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, appoll_tab_html=appoll_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
