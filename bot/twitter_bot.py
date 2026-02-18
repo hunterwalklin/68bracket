@@ -1,7 +1,9 @@
-"""Daily Twitter/X bot for 68bracket.
+"""Daily Bluesky bot for 68bracket.
 
 Reads pipeline output + ESPN scoreboard to post a daily summary thread.
 Usage: python bot/twitter_bot.py [--dry-run]
+
+Env vars: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD
 """
 
 import argparse
@@ -175,8 +177,8 @@ def compose_movers(changes, today):
         lines.append(f"\u2b07\ufe0f {team} \u2192 {c['new_seed']}-seed (was {c['prev_seed']})")
 
     text = "\n".join(lines)
-    if len(text) > 280:
-        text = _truncate_to_280(lines[0] + "\n", lines[1:])
+    if len(text) > 300:
+        text = _truncate_to_300(lines[0] + "\n", lines[1:])
     return text
 
 
@@ -215,8 +217,8 @@ def compose_upsets(games, by_espn, seeds, today):
         lines.append(u["line"])
 
     text = "\n".join(lines)
-    if len(text) > 280:
-        text = _truncate_to_280(lines[0] + "\n", lines[1:])
+    if len(text) > 300:
+        text = _truncate_to_300(lines[0] + "\n", lines[1:])
     return text
 
 
@@ -271,8 +273,8 @@ def compose_bracket_results(games, by_espn, seeds, today):
         lines.append(r["line"])
 
     text = "\n".join(lines)
-    if len(text) > 280:
-        text = _truncate_to_280(lines[0] + "\n", lines[1:])
+    if len(text) > 300:
+        text = _truncate_to_300(lines[0] + "\n", lines[1:])
     return text
 
 
@@ -320,14 +322,14 @@ def compose_games_to_watch(games, by_espn, seeds, bubble_teams, today):
     lines.append(f"\n{SITE_URL}")
 
     text = "\n".join(lines)
-    if len(text) > 280:
-        text = _truncate_to_280(lines[0] + "\n", lines[1:-1], f"\n{SITE_URL}")
+    if len(text) > 300:
+        text = _truncate_to_300(lines[0] + "\n", lines[1:-1], f"\n{SITE_URL}")
     return text
 
 
-def _truncate_to_280(header, body_lines, footer=""):
-    """Fit as many body lines as possible within 280 chars."""
-    available = 280 - len(header) - len(footer)
+def _truncate_to_300(header, body_lines, footer=""):
+    """Fit as many body lines as possible within 300 chars (Bluesky limit)."""
+    available = 300 - len(header) - len(footer)
     kept = []
     for line in body_lines:
         candidate = "\n".join(kept + [line])
@@ -389,44 +391,59 @@ def compose_thread():
     return tweets
 
 
-# ── Posting ───────────────────────────────────────────────────
+# ── Posting (Bluesky) ─────────────────────────────────────────
 
 
 def get_client():
-    import tweepy
-    return tweepy.Client(
-        consumer_key=os.environ["TWITTER_API_KEY"],
-        consumer_secret=os.environ["TWITTER_API_SECRET"],
-        access_token=os.environ["TWITTER_ACCESS_TOKEN"],
-        access_token_secret=os.environ["TWITTER_ACCESS_SECRET"],
+    from atproto import Client
+    client = Client()
+    client.login(
+        os.environ["BLUESKY_HANDLE"],
+        os.environ["BLUESKY_APP_PASSWORD"],
     )
+    return client
 
 
-def post_thread(tweets):
+def post_thread(posts):
+    from atproto import models
     client = get_client()
-    prev_id = None
-    for i, text in enumerate(tweets):
-        response = client.create_tweet(text=text, in_reply_to_tweet_id=prev_id)
-        tweet_id = response.data["id"]
-        prev_id = tweet_id
+    root_ref = None
+    parent_ref = None
+
+    for i, text in enumerate(posts):
+        reply_to = None
+        if parent_ref and root_ref:
+            reply_to = models.AppBskyFeedPost.ReplyRef(
+                parent=parent_ref,
+                root=root_ref,
+            )
+
+        response = client.send_post(text=text, reply_to=reply_to)
+        ref = models.create_strong_ref(response)
+
+        if i == 0:
+            root_ref = ref
+        parent_ref = ref
+
         label = "Thread start" if i == 0 else f"Reply {i}"
-        print(f"  {label}: https://x.com/i/web/status/{tweet_id}")
-    return prev_id
+        print(f"  {label}: https://bsky.app/profile/{os.environ['BLUESKY_HANDLE']}/post/{response.uri.split('/')[-1]}")
+
+    return root_ref
 
 
 def main():
-    parser = argparse.ArgumentParser(description="68bracket Twitter bot")
+    parser = argparse.ArgumentParser(description="68bracket Bluesky bot")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print the composed thread without posting")
     args = parser.parse_args()
 
-    tweets = compose_thread()
-    if not tweets:
-        print("No data available to compose tweets.")
+    posts = compose_thread()
+    if not posts:
+        print("No data available to compose posts.")
         sys.exit(1)
 
-    print(f"\n--- Thread ({len(tweets)} tweets) ---")
-    for i, text in enumerate(tweets):
+    print(f"\n--- Thread ({len(posts)} posts) ---")
+    for i, text in enumerate(posts):
         print(f"\n[{i + 1}] ({len(text)} chars)")
         print(text)
     print("\n---")
@@ -435,8 +452,8 @@ def main():
         print("\n(dry run — not posted)")
         return
 
-    post_thread(tweets)
-    print(f"\nPosted {len(tweets)}-tweet thread.")
+    post_thread(posts)
+    print(f"\nPosted {len(posts)}-post thread.")
 
 
 if __name__ == "__main__":
