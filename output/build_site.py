@@ -809,6 +809,33 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
     return f'<div id="scores-app"></div><script>window.__SCORES_TEAMS__={blob};</script>'
 
 
+def _build_summary_tab(stats_df: pd.DataFrame, changes: dict, bubble: dict | None, seed_rows: list | None = None) -> str:
+    """Build the Summary tab container. Embeds daily changes, bubble, and seed data for client-side JS."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Summary data not available. Run the predict command to generate.</p>'
+
+    import json as _json
+    changes_blob = _json.dumps(changes or {}, separators=(",", ":"))
+    bubble_blob = _json.dumps(bubble or {}, separators=(",", ":"))
+
+    # Build seed lookup: team_name -> seed_number
+    seed_lookup = {}
+    if seed_rows:
+        for seed_num, teams_str in seed_rows:
+            for team in teams_str.split(", "):
+                team = team.strip().rstrip("*")
+                if team:
+                    seed_lookup[team] = int(seed_num)
+    seed_blob = _json.dumps(seed_lookup, separators=(",", ":"))
+
+    return (
+        '<div id="summary-app"></div>'
+        f'<script>window.__DAILY_CHANGES__={changes_blob};'
+        f'window.__BUBBLE_DATA__={bubble_blob};'
+        f'window.__SEED_LIST__={seed_blob};</script>'
+    )
+
+
 def _build_schedule_tab(stats_df: pd.DataFrame) -> str:
     """Build the Schedule tab container. All logic is client-side JS."""
     if stats_df is None:
@@ -1107,7 +1134,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1520,6 +1547,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--text);
         }}
         .tab-panel {{ display: none; }}
+        #tab-summary:checked ~ .tab-bar label[for="tab-summary"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-bracket:checked ~ .tab-bar label[for="tab-bracket"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
@@ -1564,6 +1595,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-summary:checked ~ #panel-summary {{ display: block; }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
@@ -1946,6 +1978,158 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--text-muted);
             padding: 3rem 1rem;
             font-size: 0.95rem;
+        }}
+
+        /* Summary tab */
+        .summary-section {{
+            margin-bottom: 2.5rem;
+        }}
+        .summary-section-header {{
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 2px solid var(--accent);
+        }}
+        .summary-sub-header {{
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 1.25rem 0 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+        .summary-narrative {{
+            line-height: 1.75;
+            font-size: 0.9rem;
+        }}
+        .summary-narrative p {{
+            margin: 0.6rem 0;
+        }}
+        .summary-narrative .team-logo {{
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+            margin: 0 2px;
+        }}
+        .summary-team-ref {{
+            font-weight: 600;
+            cursor: pointer;
+        }}
+        .summary-team-ref:hover {{
+            text-decoration: underline;
+        }}
+        .summary-ctx {{
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            font-weight: 400;
+        }}
+        .summary-score {{
+            font-weight: 700;
+        }}
+        .summary-impact {{
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.85rem;
+        }}
+        .summary-movers {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 0.75rem 0 1rem;
+        }}
+        .summary-mover {{
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.8rem;
+            border-left: 3px solid var(--text-muted);
+        }}
+        .summary-mover .team-logo {{
+            width: 22px;
+            height: 22px;
+        }}
+        .mover-up {{ border-left-color: var(--green); }}
+        .mover-up .mover-arrow {{ color: var(--green); }}
+        .mover-down {{ border-left-color: var(--red); }}
+        .mover-down .mover-arrow {{ color: var(--red); }}
+        .mover-new {{ border-left-color: var(--accent); }}
+        .mover-new .mover-arrow {{ color: var(--accent); }}
+        .mover-arrow {{
+            font-weight: 700;
+            font-size: 0.7rem;
+        }}
+        .mover-seeds {{
+            color: var(--text-muted);
+            font-size: 0.72rem;
+        }}
+        .summary-preview-card {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.7rem 0.9rem;
+            margin-bottom: 0.6rem;
+        }}
+        .summary-preview-card .summary-matchup-line {{
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.88rem;
+            margin-bottom: 0.3rem;
+        }}
+        .summary-preview-card .summary-matchup-line .team-logo {{
+            width: 20px;
+            height: 20px;
+        }}
+        .summary-preview-card .summary-stakes {{
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-top: 0.2rem;
+        }}
+        .summary-preview-card .summary-pred-line {{
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }}
+        .summary-loading {{
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2rem 1rem;
+            font-size: 0.95rem;
+        }}
+        .summary-empty {{
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-style: italic;
+            padding: 0.5rem 0;
+        }}
+        .summary-live-section {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 0.85rem;
+            margin-bottom: 0.75rem;
+        }}
+        .summary-live-game {{
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            padding: 0.25rem 0;
+        }}
+        .summary-live-game .team-logo {{
+            width: 18px;
+            height: 18px;
+        }}
+        @media (max-width: 600px) {{
+            .summary-narrative {{ font-size: 0.85rem; }}
+            .summary-mover {{ padding: 0.25rem 0.5rem; font-size: 0.75rem; }}
+            .summary-preview-card {{ padding: 0.5rem 0.65rem; }}
         }}
 
         @media (max-width: 600px) {{
@@ -2472,7 +2656,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <div class="timestamp">Model: {model_label} &middot; Last Updated: {timestamp}</div>
         </header>
 
-        <input type="radio" name="tabs" id="tab-bracket" class="tab-radio" checked>
+        <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
+        <input type="radio" name="tabs" id="tab-bracket" class="tab-radio">
         <input type="radio" name="tabs" id="tab-stats" class="tab-radio">
         <input type="radio" name="tabs" id="tab-bubble" class="tab-radio">
         <input type="radio" name="tabs" id="tab-conf" class="tab-radio">
@@ -2485,6 +2670,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-standings" class="tab-radio">
 
         <div class="tab-bar">
+            <label for="tab-summary">Summary</label>
             <label for="tab-bracket">Bracket</label>
             <label for="tab-ranking">Power Rankings</label>
             <label for="tab-scores">Scores</label>
@@ -2496,6 +2682,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <label for="tab-conf">Conferences</label>
             <label for="tab-standings">Standings</label>
             <label for="tab-stats">Team Stats</label>
+        </div>
+
+        <div id="panel-summary" class="tab-panel">
+            <h2>Daily Summary</h2>
+            {summary_tab_html if summary_tab_html else '<p style="color: var(--text-muted);">Summary data not available. Run the predict command to generate.</p>'}
         </div>
 
         <div id="panel-bracket" class="tab-panel">
@@ -2827,7 +3018,6 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         var teams=window.__SCORES_TEAMS__;
         var sel=[null,null];
         var venue='neutral'; /* 'homeA', 'neutral', 'homeB' */
-        var HCA=3.5; /* home court advantage in points */
         var CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
 
         function logoUrl(espn){{return espn?CDN+espn+'.png&h=40&w=40':'';}}
@@ -2912,9 +3102,16 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var emA=a.oe-a.de, emB=b.oe-b.de;
             var spread=(emA-emB)*posFactor;
 
-            /* Apply home court advantage */
-            if(venue==='homeA')spread+=HCA;
-            else if(venue==='homeB')spread-=HCA;
+            /* Apply team-specific home court advantage */
+            if(venue==='homeA'){{
+                var hcaA=a.hcaPts!==undefined?a.hcaPts:(a.hca*6+1);
+                if(hcaA<0.5)hcaA=0.5;
+                spread+=hcaA;
+            }}else if(venue==='homeB'){{
+                var hcaB=b.hcaPts!==undefined?b.hcaPts:(b.hca*6+1);
+                if(hcaB<0.5)hcaB=0.5;
+                spread-=hcaB;
+            }}
 
             /* Convert spread to win probability using logistic function */
             var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
@@ -3262,6 +3459,482 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             if(e.key==='ArrowLeft')shiftDate(-1);
             else if(e.key==='ArrowRight')shiftDate(1);
         }});
+    }})();
+
+    /* ── Summary tab ── */
+    (function(){{
+        var app=document.getElementById('summary-app');
+        if(!app||!window.__SCORES_TEAMS__)return;
+        var teams=window.__SCORES_TEAMS__;
+        var changes=window.__DAILY_CHANGES__||{{}};
+        var bubbleData=window.__BUBBLE_DATA__||{{}};
+        var seeds=window.__SEED_LIST__||{{}};
+        var CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
+        var API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
+        var loaded=false;
+
+        var byEspn={{}},byName={{}};
+        teams.forEach(function(t){{
+            if(t.espn)byEspn[String(t.espn)]=t;
+            if(t.name)byName[t.name]=t;
+        }});
+
+        var bubbleTeams={{}};
+        var bubbleLabels={{last_4_in:'Last Four In',first_4_out:'First Four Out',next_4_out:'Next Four Out',last_4_byes:'Last Four Byes'}};
+        ['last_4_in','first_4_out','next_4_out','last_4_byes'].forEach(function(k){{
+            (bubbleData[k]||[]).forEach(function(n){{bubbleTeams[n]=k;}});
+        }});
+
+        function pad(n){{return n<10?'0'+n:''+n;}}
+        function fmtDate(d){{return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());}}
+        function displayDate(d){{
+            var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
+        }}
+
+        function predict(a,b,homeId){{
+            if(!a||!b)return null;
+            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
+            var ptsA=(a.oe+b.de)/2*posFactor;
+            var ptsB=(b.oe+a.de)/2*posFactor;
+            if(homeId){{
+                var ht=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
+                if(ht){{
+                    var pts=ht.hcaPts!==undefined?ht.hcaPts:(ht.hca*6+1);
+                    if(pts<0.5)pts=0.5;
+                    var half=pts/2;
+                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
+                    else{{ptsB+=half;ptsA-=half;}}
+                }}
+            }}
+            var spread=ptsA-ptsB;
+            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
+            var comp=Math.max(0,1-Math.abs(spread)/20);
+            var avgNet=(a.net+b.net)/2;
+            var qual=Math.max(0,1-avgNet/200);
+            var watch=Math.round((comp*0.6+qual*0.4)*100);
+            var rA=Math.round(ptsA),rB=Math.round(ptsB);
+            if(rA===rB){{if(spread>=0)rA+=1;else rB+=1;}}
+            return {{ptsA:rA,ptsB:rB,spread:spread,winA:winA,watch:watch}};
+        }}
+
+        function parseGames(data){{
+            var events=data.events||[];
+            var games=[];
+            events.forEach(function(ev){{
+                var comp=ev.competitions&&ev.competitions[0];
+                if(!comp)return;
+                var away=null,home=null;
+                (comp.competitors||[]).forEach(function(c){{
+                    if(c.homeAway==='away')away=c;else home=c;
+                }});
+                if(!away||!home)return;
+                var awayId=away.team&&away.team.id?String(away.team.id):'';
+                var homeId=home.team&&home.team.id?String(home.team.id):'';
+                var awayTeam=byEspn[awayId]||null;
+                var homeTeam=byEspn[homeId]||null;
+                var awayName=awayTeam?awayTeam.name:(away.team&&away.team.displayName?away.team.displayName:'TBD');
+                var homeName=homeTeam?homeTeam.name:(home.team&&home.team.displayName?home.team.displayName:'TBD');
+                games.push({{
+                    awayName:awayName,homeName:homeName,
+                    awayId:awayId,homeId:homeId,
+                    awayTeam:awayTeam,homeTeam:homeTeam,
+                    awayScore:away.score?parseInt(away.score):0,
+                    homeScore:home.score?parseInt(home.score):0,
+                    state:(comp.status||{{}}).type?((comp.status||{{}}).type.state||'pre'):'pre',
+                    detail:((comp.status||{{}}).type||{{}}).shortDetail||'',
+                    pred:predict(awayTeam,homeTeam,homeId)
+                }});
+            }});
+            return games;
+        }}
+
+        /* ── Helpers ── */
+        function ref(name,team){{
+            var logo=team&&team.espn?'<img class="team-logo" src="'+CDN+team.espn+'.png&h=20&w=20" alt="" loading="lazy">':'';
+            var dt=team?team.name:name;
+            return logo+'<span class="summary-team-ref stats-team" data-team="'+dt+'">'+name+'</span>';
+        }}
+
+        function ctx(name){{
+            if(seeds[name])return ' <span class="summary-ctx">('+seeds[name]+'-seed)</span>';
+            var bk=bubbleTeams[name];
+            if(bk)return ' <span class="summary-ctx">('+bubbleLabels[bk]+')</span>';
+            var t=byName[name];
+            if(t&&t.net<=60)return ' <span class="summary-ctx">(NET '+t.net+')</span>';
+            return '';
+        }}
+
+        function isFieldTeam(name){{
+            return !!seeds[name];
+        }}
+        function isBubble(name){{
+            return !!bubbleTeams[name];
+        }}
+        function isRelevant(name){{
+            return isFieldTeam(name)||isBubble(name);
+        }}
+        function isRelevantGame(g){{
+            return isRelevant(g.awayName)||isRelevant(g.homeName);
+        }}
+
+        function winVerb(margin){{
+            if(margin>=20)return 'dominated';
+            if(margin>=12)return 'cruised past';
+            if(margin>=6)return 'beat';
+            if(margin>=3)return 'held off';
+            return 'edged';
+        }}
+
+        function venueWord(g,teamName){{
+            /* Did this team play at home or on the road? */
+            var t=byName[teamName];
+            if(!t)return '';
+            if(String(g.homeId)===String(t.espn))return ' at home';
+            return ' on the road';
+        }}
+
+        /* ── Yesterday's Recap ── */
+        function renderRecap(data){{
+            var games=parseGames(data);
+            var completed=games.filter(function(g){{return g.state==='post';}});
+            var html='<div class="summary-narrative">';
+
+            /* 1. Seed movers */
+            var changesArr=[];
+            for(var name in changes){{
+                if(!changes.hasOwnProperty(name))continue;
+                changesArr.push({{name:name,dir:changes[name].direction,prev:changes[name].prev_seed,ns:changes[name].new_seed}});
+            }}
+
+            if(changesArr.length>0){{
+                changesArr.sort(function(a,b){{
+                    if(a.dir==='up'&&b.dir!=='up')return -1;
+                    if(a.dir!=='up'&&b.dir==='up')return 1;
+                    return (a.ns||99)-(b.ns||99);
+                }});
+
+                html+='<div class="summary-sub-header">Bracket Movers</div>';
+
+                /* Chip strip */
+                html+='<div class="summary-movers">';
+                changesArr.forEach(function(c){{
+                    var t=byName[c.name];
+                    var logo=t&&t.espn?'<img class="team-logo" src="'+CDN+t.espn+'.png&h=24&w=24" alt="" loading="lazy">':'';
+                    var cls='summary-mover';
+                    var arrow='',seedTxt='';
+                    if(c.prev===null){{cls+=' mover-new';arrow='NEW';seedTxt='&rarr; '+c.ns;}}
+                    else if(c.dir==='up'){{cls+=' mover-up';arrow='&#9650;';seedTxt=c.prev+' &rarr; '+c.ns;}}
+                    else{{cls+=' mover-down';arrow='&#9660;';seedTxt=c.prev+' &rarr; '+c.ns;}}
+                    html+='<div class="'+cls+'">'+logo
+                        +'<span class="stats-team" data-team="'+(t?t.name:c.name)+'" style="cursor:pointer">'+c.name+'</span>'
+                        +'<span class="mover-arrow">'+arrow+'</span>'
+                        +'<span class="mover-seeds">'+seedTxt+'</span></div>';
+                }});
+                html+='</div>';
+
+                /* Narrative for each mover, connecting to their game if found */
+                changesArr.forEach(function(c){{
+                    var t=byName[c.name];
+                    var game=null;
+                    completed.forEach(function(g){{
+                        if(g.awayName===c.name||g.homeName===c.name||(g.awayTeam&&g.awayTeam.name===c.name)||(g.homeTeam&&g.homeTeam.name===c.name))game=g;
+                    }});
+
+                    if(!game){{
+                        /* Moved without playing — other results shifted them */
+                        if(c.prev===null){{
+                            html+='<p>'+ref(c.name,t)+' enters the projected field as a new <strong>'+c.ns+'-seed</strong>.</p>';
+                        }}else if(c.dir==='up'){{
+                            html+='<p>'+ref(c.name,t)+' moves up from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> without playing — other results shifted the field in their favor.</p>';
+                        }}else{{
+                            html+='<p>'+ref(c.name,t)+' drops from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> despite not playing — other results pushed them down.</p>';
+                        }}
+                        return;
+                    }}
+
+                    var awayWon=game.awayScore>game.homeScore;
+                    var margin=Math.abs(game.awayScore-game.homeScore);
+                    var won=(game.awayName===c.name&&awayWon)||(game.homeName===c.name&&!awayWon)||
+                        (game.awayTeam&&game.awayTeam.name===c.name&&awayWon)||(game.homeTeam&&game.homeTeam.name===c.name&&!awayWon);
+                    var oppName=won?(awayWon?game.homeName:game.awayName):(awayWon?game.awayName:game.homeName);
+                    var oppTeam=byName[oppName];
+                    var score=game.awayScore>game.homeScore?game.awayScore+'-'+game.homeScore:game.homeScore+'-'+game.awayScore;
+                    var venue=venueWord(game,c.name);
+
+                    if(c.prev===null){{
+                        html+='<p>'+ref(c.name,t)+' enters the projected field as a new <strong>'+c.ns+'-seed</strong> after '
+                            +(won?'a '+score+' win over':'falling to')+' '+ref(oppName,oppTeam)+ctx(oppName)+venue+'.</p>';
+                    }}else if(c.dir==='up'){{
+                        html+='<p>'+ref(c.name,t)+' climbed from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> after '
+                            +(won?winVerb(margin)+'ing':('a '+score+' loss to'))+' '+ref(oppName,oppTeam)+ctx(oppName)
+                            +(won?', '+score+venue:venue)+'.</p>';
+                    }}else{{
+                        html+='<p>'+ref(c.name,t)+' dropped from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> after '
+                            +(won?'a narrow '+score+' win over':'falling to')+' '+ref(oppName,oppTeam)+ctx(oppName)
+                            +(won?venue:', '+score+venue)+'.</p>';
+                    }}
+                }});
+            }}
+
+            /* 2. Relevant completed games not already covered by movers */
+            var coveredTeams={{}};
+            changesArr.forEach(function(c){{coveredTeams[c.name]=true;}});
+
+            var relevantGames=completed.filter(function(g){{
+                if(!isRelevantGame(g))return false;
+                var aCov=coveredTeams[g.awayName]||(g.awayTeam&&coveredTeams[g.awayTeam.name]);
+                var bCov=coveredTeams[g.homeName]||(g.homeTeam&&coveredTeams[g.homeTeam.name]);
+                if(aCov&&bCov)return false; /* both teams already narrated as movers */
+                return true;
+            }});
+
+            /* Categorize */
+            var upsetGames=[],bubbleGames=[],bracketGames=[];
+            relevantGames.forEach(function(g){{
+                var awayWon=g.awayScore>g.homeScore;
+                var winTeam=awayWon?g.awayTeam:g.homeTeam;
+                var loseTeam=awayWon?g.homeTeam:g.awayTeam;
+                var isUpset=winTeam&&loseTeam&&(winTeam.net-loseTeam.net>=30);
+                var bub=(isBubble(g.awayName)||isBubble(g.homeName)||(g.awayTeam&&isBubble(g.awayTeam.name))||(g.homeTeam&&isBubble(g.homeTeam.name)));
+
+                if(isUpset)upsetGames.push(g);
+                else if(bub)bubbleGames.push(g);
+                else bracketGames.push(g);
+            }});
+
+            /* Upsets */
+            if(upsetGames.length>0){{
+                html+='<div class="summary-sub-header">Upsets</div>';
+                upsetGames.forEach(function(g){{
+                    var awayWon=g.awayScore>g.homeScore;
+                    var winName=awayWon?g.awayName:g.homeName;
+                    var loseName=awayWon?g.homeName:g.awayName;
+                    var winTeam=byName[winName];
+                    var loseTeam=byName[loseName];
+                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
+                    var venue=venueWord(g,winName);
+                    html+='<p>'+ref(winName,winTeam)+ctx(winName)+' knocked off '
+                        +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue
+                        +'. <span class="summary-impact">'
+                        +(loseTeam?'The '+loseName+' loss is a hit to their seed — '+(seeds[loseName]?'currently a '+seeds[loseName]+'-seed.':'watch for movement.'):'')
+                        +'</span></p>';
+                }});
+            }}
+
+            /* Bubble results */
+            if(bubbleGames.length>0){{
+                html+='<div class="summary-sub-header">Bubble Watch</div>';
+                bubbleGames.forEach(function(g){{
+                    var awayWon=g.awayScore>g.homeScore;
+                    var winName=awayWon?g.awayName:g.homeName;
+                    var loseName=awayWon?g.homeName:g.awayName;
+                    var winTeam=byName[winName];
+                    var loseTeam=byName[loseName];
+                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
+                    var venue=venueWord(g,winName);
+
+                    var winBub=bubbleTeams[winName];
+                    var loseBub=bubbleTeams[loseName];
+
+                    if(winBub){{
+                        var label=bubbleLabels[winBub];
+                        var oppCtx=ctx(loseName);
+                        html+='<p>'+ref(winName,winTeam)+' <span class="summary-ctx">('+label+')</span> picked up a '
+                            +(loseTeam&&loseTeam.net<=50?'quality ':'')+'win over '+ref(loseName,loseTeam)+oppCtx
+                            +', '+score+venue+'. <span class="summary-impact">'
+                            +(winBub==='first_4_out'||winBub==='next_4_out'?'A much-needed result for their at-large case.':'A resume-builder that should help their standing.')
+                            +'</span></p>';
+                    }}else if(loseBub){{
+                        var label2=bubbleLabels[loseBub];
+                        html+='<p>'+ref(loseName,loseTeam)+' <span class="summary-ctx">('+label2+')</span> took a tough loss to '
+                            +ref(winName,winTeam)+ctx(winName)+', '+score
+                            +'. <span class="summary-impact">'
+                            +(loseBub==='last_4_in'?'They could be in danger of slipping out of the field.':'That makes their path to an at-large bid even steeper.')
+                            +'</span></p>';
+                    }}
+                }});
+            }}
+
+            /* Other bracket results */
+            if(bracketGames.length>0){{
+                html+='<div class="summary-sub-header">Around the Bracket</div>';
+                /* Sort by winner seed (most important first) */
+                bracketGames.sort(function(a,b){{
+                    var awA=a.awayScore>a.homeScore?a.awayName:a.homeName;
+                    var awB=b.awayScore>b.homeScore?b.awayName:b.homeName;
+                    return (seeds[awA]||99)-(seeds[awB]||99);
+                }});
+                bracketGames.slice(0,8).forEach(function(g){{
+                    var awayWon=g.awayScore>g.homeScore;
+                    var winName=awayWon?g.awayName:g.homeName;
+                    var loseName=awayWon?g.homeName:g.awayName;
+                    var winTeam=byName[winName];
+                    var loseTeam=byName[loseName];
+                    var margin=Math.abs(g.awayScore-g.homeScore);
+                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
+                    var venue=venueWord(g,winName);
+                    html+='<p>'+ref(winName,winTeam)+ctx(winName)+' '+winVerb(margin)+' '
+                        +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue+'.</p>';
+                }});
+            }}
+
+            if(completed.length===0||relevantGames.length===0&&changesArr.length===0){{
+                html+='<p class="summary-empty">No games of note yesterday.</p>';
+            }}
+
+            html+='</div>';
+            return html;
+        }}
+
+        /* ── Today's Preview ── */
+        function renderPreview(data){{
+            var games=parseGames(data);
+            var html='<div class="summary-narrative">';
+
+            /* Separate by state */
+            var live=games.filter(function(g){{return g.state==='in'&&isRelevantGame(g);}});
+            var upcoming=games.filter(function(g){{return g.state==='pre'&&isRelevantGame(g)&&g.pred;}});
+            var done=games.filter(function(g){{return g.state==='post'&&isRelevantGame(g);}});
+
+            /* Sort upcoming by watchability */
+            upcoming.sort(function(a,b){{return (b.pred?b.pred.watch:0)-(a.pred?a.pred.watch:0);}});
+
+            /* ── Live games ── */
+            if(live.length>0){{
+                html+='<div class="summary-sub-header">Live Now</div>';
+                live.forEach(function(g){{
+                    var awayLead=g.awayScore>g.homeScore;
+                    var leadName=awayLead?g.awayName:g.homeName;
+                    var trailName=awayLead?g.homeName:g.awayName;
+                    var leadTeam=byName[leadName];
+                    var trailTeam=byName[trailName];
+                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
+                    var det=g.detail?' ('+g.detail+')':'';
+                    html+='<p>'+ref(leadName,leadTeam)+ctx(leadName)+' leads '
+                        +ref(trailName,trailTeam)+ctx(trailName)+', '+score+det+'.';
+                    if(g.pred){{
+                        var favName=g.pred.spread>=0?g.awayName:g.homeName;
+                        var pct=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                        html+=' <span class="summary-impact">Pre-game pick: '+favName+' '+pct+'%.</span>';
+                    }}
+                    html+='</p>';
+                }});
+            }}
+
+            /* ── Coming up ── */
+            if(upcoming.length>0){{
+                html+='<div class="summary-sub-header">Games to Watch</div>';
+
+                upcoming.forEach(function(g){{
+                    var p=g.pred;
+                    var favName=p.spread>=0?g.awayName:g.homeName;
+                    var spreadAbs=Math.abs(p.spread).toFixed(1);
+                    var pct=(Math.max(p.winA,1-p.winA)*100).toFixed(0);
+                    var awayTeam=g.awayTeam;
+                    var homeTeam=g.homeTeam;
+                    var w=p.watch;
+                    var hue=Math.round(w*1.2);
+
+                    /* Build stakes description */
+                    var stakes=[];
+                    if(seeds[g.awayName]&&seeds[g.homeName]){{
+                        stakes.push('A matchup between two projected tournament teams.');
+                    }}
+                    if(isBubble(g.awayName)){{
+                        var bl=bubbleLabels[bubbleTeams[g.awayName]];
+                        stakes.push(g.awayName+' ('+bl+') '+(seeds[g.homeName]?'has a chance at a signature win.':'needs this one.'));
+                    }}
+                    if(isBubble(g.homeName)){{
+                        var bl2=bubbleLabels[bubbleTeams[g.homeName]];
+                        stakes.push(g.homeName+' ('+bl2+') '+(seeds[g.awayName]?'has a chance at a signature win at home.':'needs this one at home.'));
+                    }}
+
+                    html+='<div class="summary-preview-card">'
+                        +'<div class="summary-matchup-line">'
+                            +ref(g.awayName,awayTeam)+ctx(g.awayName)
+                            +' <span class="summary-ctx">at</span> '
+                            +ref(g.homeName,homeTeam)+ctx(g.homeName)
+                        +'</div>';
+                    if(stakes.length>0){{
+                        html+='<div class="summary-stakes">'+stakes.join(' ')+'</div>';
+                    }}
+                    html+='<div class="summary-pred-line">'
+                        +'Prediction: '+favName+' by '+spreadAbs+' ('+pct+'%)'
+                        +' &middot; <span style="color:hsl('+hue+',70%,50%);font-weight:600">Watchability: '+w+'</span>'
+                        +'</div></div>';
+                }});
+            }}
+
+            /* ── Completed today ── */
+            if(done.length>0){{
+                html+='<div class="summary-sub-header">Earlier Today</div>';
+                done.forEach(function(g){{
+                    var awayWon=g.awayScore>g.homeScore;
+                    var winName=awayWon?g.awayName:g.homeName;
+                    var loseName=awayWon?g.homeName:g.awayName;
+                    var winTeam=byName[winName];
+                    var loseTeam=byName[loseName];
+                    var margin=Math.abs(g.awayScore-g.homeScore);
+                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
+                    var venue=venueWord(g,winName);
+
+                    var winBub=bubbleTeams[winName];
+                    var loseBub=bubbleTeams[loseName];
+                    var impact='';
+                    if(winBub)impact=' <span class="summary-impact">Good result for the '+bubbleLabels[winBub]+'.</span>';
+                    else if(loseBub)impact=' <span class="summary-impact">Tough loss for the '+bubbleLabels[loseBub]+'.</span>';
+
+                    html+='<p>'+ref(winName,winTeam)+ctx(winName)+' '+winVerb(margin)+' '
+                        +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue+'.'+impact+'</p>';
+                }});
+            }}
+
+            if(live.length===0&&upcoming.length===0&&done.length===0){{
+                html+='<p class="summary-empty">No games of note on the schedule today.</p>';
+            }}
+
+            html+='</div>';
+            return html;
+        }}
+
+        function fetchAndRender(){{
+            var today=new Date();
+            var yesterday=new Date(today);
+            yesterday.setDate(yesterday.getDate()-1);
+            var todayStr=fmtDate(today);
+            var yesterdayStr=fmtDate(yesterday);
+
+            app.innerHTML='<div class="summary-loading">Loading daily summary...</div>';
+
+            Promise.all([
+                fetch(API+'?dates='+yesterdayStr+'&limit=200&groups=50').then(function(r){{return r.json();}}),
+                fetch(API+'?dates='+todayStr+'&limit=200&groups=50').then(function(r){{return r.json();}})
+            ]).then(function(results){{
+                var html='';
+                html+='<div class="summary-section">';
+                html+='<div class="summary-section-header">Yesterday &middot; '+displayDate(yesterday)+'</div>';
+                html+=renderRecap(results[0]);
+                html+='</div>';
+                html+='<div class="summary-section">';
+                html+='<div class="summary-section-header">Today &middot; '+displayDate(today)+'</div>';
+                html+=renderPreview(results[1]);
+                html+='</div>';
+                app.innerHTML=html;
+            }}).catch(function(){{
+                app.innerHTML='<div class="summary-loading">Failed to load summary. Try refreshing.</div>';
+            }});
+        }}
+
+        var summaryRadio=document.getElementById('tab-summary');
+        function initSummary(){{
+            if(!loaded){{loaded=true;fetchAndRender();}}
+        }}
+        if(summaryRadio){{
+            summaryRadio.addEventListener('change',function(){{if(this.checked)initSummary();}});
+            if(summaryRadio.checked)initSummary();
+        }}
     }})();
 
     /* ── Team Profile Modal ── */
@@ -3822,9 +4495,14 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
     if stats_df is not None:
         homecourt_tab_html = _build_homecourt_tab(stats_df)
 
+    # Build summary tab
+    summary_tab_html = ""
+    if stats_df is not None:
+        summary_tab_html = _build_summary_tab(stats_df, changes, bubble, seed_rows_for_matrix)
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:

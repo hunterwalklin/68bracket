@@ -11,9 +11,9 @@ dominating — HCA is scaled by the team's overall strength percentile.
 
 Components & weights:
 - Foul advantage (40%)  — opponent fouls minus own fouls, home vs road
-- Scoring advantage (25%) — point margin, home vs road
-- Turnover advantage (20%) — non-steal turnovers, home vs road
-- Block advantage (15%) — blocks, home vs road
+- Scoring advantage (40%) — point margin, home vs road
+- Turnover advantage (15%) — non-steal turnovers, home vs road
+- Block advantage (5%) — blocks, home vs road
 """
 
 import numpy as np
@@ -22,9 +22,9 @@ import pandas as pd
 
 # Component weights (sum to 1.0)
 FOUL_WEIGHT = 0.40
-SCORING_WEIGHT = 0.25
-TURNOVER_WEIGHT = 0.20
-BLOCK_WEIGHT = 0.15
+SCORING_WEIGHT = 0.40
+TURNOVER_WEIGHT = 0.15
+BLOCK_WEIGHT = 0.05
 
 # Minimum games required
 MIN_HOME_GAMES = 5
