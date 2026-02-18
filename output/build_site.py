@@ -262,26 +262,28 @@ def _build_standings_tab(stats_df) -> str:
                 status = ''
 
             logo = _team_logo(str(r.get('school_id', '')))
+            team_name = str(r.get('team', ''))
             rows += (
-                f"<tr>"
+                f"<tr data-team=\"{escape(team_name)}\">"
                 f"<td>{i + 1}</td>"
-                f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
+                f"<td class='stats-team'>{logo}{escape(team_name)}</td>"
                 f"<td>{conf_rec}</td>"
                 f"<td>{overall_rec}</td>"
                 f"<td>{net}</td>"
                 f"<td>{status}</td>"
+                f"<td class='title-pct'>\u2014</td>"
                 f"</tr>\n"
             )
 
         table = f"""<table class="stats-table standings-table">
 <thead><tr>
-    <th>#</th><th>Team</th><th>Conf</th><th>Overall</th><th>NET</th><th></th>
+    <th>#</th><th>Team</th><th>Conf</th><th>Overall</th><th>NET</th><th></th><th>Title %</th>
 </tr></thead>
 <tbody>
 {rows}</tbody>
 </table>"""
 
-        html += f"""<details class="standings-conf"{open_attr}>
+        html += f"""<details class="standings-conf" data-conf="{escape(conf)}"{open_attr}>
 <summary class="standings-summary">{clogo}<span class="standings-conf-name">{escape(conf)}</span><span class="standings-conf-meta">{bids_label}</span></summary>
 {table}
 </details>\n"""
@@ -780,6 +782,8 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
             "bpi": int(r.get("bpi", 0) or 0),
             "pom": int(r.get("pom", 0) or 0),
             "wab": round(float(r.get("wab", 0) or 0), 1),
+            "confW": int(r.get("conf_wins", 0) or 0),
+            "confL": int(r.get("conf_losses", 0) or 0),
         }
 
         # Quadrant records
@@ -1660,6 +1664,22 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
         .standing-bubble {{
             color: var(--accent);
+        }}
+        .title-pct {{
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-align: right;
+            min-width: 50px;
+        }}
+        .title-pct.simulated {{
+            color: var(--text);
+        }}
+        .title-pct.title-high {{
+            color: var(--green);
+        }}
+        .title-pct.title-lock {{
+            color: var(--green);
+            font-weight: 700;
         }}
 
         /* Scores tab — interactive picker */
@@ -2734,6 +2754,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         <div id="panel-standings" class="tab-panel">
             <h2>Conference Standings</h2>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0;">Title % shows each team's chance to win or share the regular season conference title based on 1,000 simulations of remaining games. Percentages can add up to over 100% because multiple teams can share a title in the same simulation.</p>
             {standings_tab_html if standings_tab_html else '<p style="color: var(--text-muted);">Standings data not available. Run the predict command to generate.</p>'}
         </div>
 
@@ -3459,6 +3480,193 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             if(e.key==='ArrowLeft')shiftDate(-1);
             else if(e.key==='ArrowRight')shiftDate(1);
         }});
+    }})();
+
+    /* ── Conference Title Simulation ── */
+    (function(){{
+        if(!window.__SCORES_TEAMS__)return;
+        var teams=window.__SCORES_TEAMS__;
+        var SCHED_API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/';
+        var schedCache={{}};
+        var SIMS=1000;
+
+        /* Build conference -> teams lookup */
+        var confTeams={{}};
+        var byEspn={{}};
+        teams.forEach(function(t){{
+            if(t.conf){{
+                if(!confTeams[t.conf])confTeams[t.conf]=[];
+                confTeams[t.conf].push(t);
+            }}
+            if(t.espn)byEspn[String(t.espn)]=t;
+        }});
+
+        function predict(a,b,homeId){{
+            if(!a||!b)return 0.5;
+            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
+            var ptsA=(a.oe+b.de)/2*posFactor;
+            var ptsB=(b.oe+a.de)/2*posFactor;
+            if(homeId){{
+                var ht=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
+                if(ht){{
+                    var pts=ht.hcaPts!==undefined?ht.hcaPts:(ht.hca*6+1);
+                    if(pts<0.5)pts=0.5;
+                    var half=pts/2;
+                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
+                    else{{ptsB+=half;ptsA-=half;}}
+                }}
+            }}
+            var spread=ptsA-ptsB;
+            return 1/(1+Math.pow(10,-spread/(11*posFactor)));
+        }}
+
+        function fetchSchedule(espnId){{
+            if(schedCache[espnId])return Promise.resolve(schedCache[espnId]);
+            var now=new Date();
+            var yr=now.getMonth()>=7?now.getFullYear()+1:now.getFullYear();
+            return fetch(SCHED_API+espnId+'/schedule?season='+yr)
+                .then(function(r){{return r.json();}})
+                .then(function(data){{schedCache[espnId]=data;return data;}})
+                .catch(function(){{return null;}});
+        }}
+
+        function simulateConference(confName,details){{
+            var ct=confTeams[confName];
+            if(!ct||ct.length===0)return;
+
+            /* Collect ESPN IDs for this conference */
+            var confEspnIds={{}};
+            ct.forEach(function(t){{if(t.espn)confEspnIds[String(t.espn)]=t;}});
+
+            /* Update cells to show loading */
+            var rows=details.querySelectorAll('tr[data-team]');
+            rows.forEach(function(row){{
+                var cell=row.querySelector('.title-pct');
+                if(cell)cell.textContent='...';
+            }});
+
+            /* Fetch all team schedules in parallel */
+            var teamsWithEspn=ct.filter(function(t){{return t.espn;}});
+            var fetches=teamsWithEspn.map(function(t){{return fetchSchedule(t.espn);}});
+
+            Promise.all(fetches).then(function(schedules){{
+                /* Find remaining conference games */
+                var remainingGames=[];
+                var seen={{}};
+
+                schedules.forEach(function(sched,i){{
+                    if(!sched)return;
+                    var team=teamsWithEspn[i];
+                    var events=[];
+                    if(sched.events)events=sched.events;
+                    else if(sched.team&&sched.team.events)events=sched.team.events;
+
+                    events.forEach(function(ev){{
+                        var comp=ev.competitions&&ev.competitions[0];
+                        if(!comp)return;
+                        var st=(comp.status||{{}}).type||{{}};
+                        if(st.state!=='pre')return;
+
+                        var competitors=comp.competitors||[];
+                        if(competitors.length<2)return;
+                        var home=null,away=null;
+                        competitors.forEach(function(c){{
+                            if(c.homeAway==='home')home=c;
+                            else away=c;
+                        }});
+                        if(!home||!away)return;
+
+                        var homeId=String(home.team&&home.team.id||'');
+                        var awayId=String(away.team&&away.team.id||'');
+
+                        /* Both teams must be in the conference */
+                        if(!confEspnIds[homeId]||!confEspnIds[awayId])return;
+
+                        var key=[homeId,awayId].sort().join('-');
+                        if(seen[key])return;
+                        seen[key]=true;
+
+                        var homeTeam=confEspnIds[homeId];
+                        var awayTeam=confEspnIds[awayId];
+                        var winProb=predict(awayTeam,homeTeam,homeId);
+                        remainingGames.push({{
+                            homeName:homeTeam.name,
+                            awayName:awayTeam.name,
+                            awayWinProb:winProb
+                        }});
+                    }});
+                }});
+
+                /* Run Monte Carlo */
+                var titleCounts={{}};
+                ct.forEach(function(t){{titleCounts[t.name]=0;}});
+
+                for(var sim=0;sim<SIMS;sim++){{
+                    /* Start with current conference records */
+                    var records={{}};
+                    ct.forEach(function(t){{
+                        records[t.name]={{w:t.confW||0,l:t.confL||0}};
+                    }});
+
+                    /* Simulate remaining games */
+                    remainingGames.forEach(function(g){{
+                        if(Math.random()<g.awayWinProb){{
+                            records[g.awayName].w++;
+                            records[g.homeName].l++;
+                        }}else{{
+                            records[g.homeName].w++;
+                            records[g.awayName].l++;
+                        }}
+                    }});
+
+                    /* Find best record(s) — share of title */
+                    var bestWins=-1;
+                    ct.forEach(function(t){{
+                        var r=records[t.name];
+                        if(r.w>bestWins)bestWins=r.w;
+                    }});
+                    ct.forEach(function(t){{
+                        if(records[t.name].w===bestWins)titleCounts[t.name]++;
+                    }});
+                }}
+
+                /* Update DOM */
+                rows.forEach(function(row){{
+                    var name=row.dataset.team;
+                    var cell=row.querySelector('.title-pct');
+                    if(!cell)return;
+                    var count=titleCounts[name]||0;
+                    var pct=Math.round(count/SIMS*100);
+                    if(pct===0&&count>0)pct=1; /* show <1% as 1% */
+                    cell.textContent=pct>0?pct+'%':'\u2014';
+                    cell.classList.add('simulated');
+                    if(pct>=90)cell.classList.add('title-lock');
+                    else if(pct>=25)cell.classList.add('title-high');
+                }});
+            }});
+        }}
+
+        /* Simulate all conferences when standings tab is activated */
+        var standingsRadio=document.getElementById('tab-standings');
+        var simulated=false;
+        function initStandings(){{
+            if(simulated)return;
+            simulated=true;
+            var allConfs=document.querySelectorAll('.standings-conf[data-conf]');
+            /* Stagger fetches — process 3 conferences at a time */
+            var queue=Array.from(allConfs);
+            function processNext(){{
+                var batch=queue.splice(0,3);
+                if(batch.length===0)return;
+                batch.forEach(function(d){{simulateConference(d.dataset.conf,d);}});
+                setTimeout(processNext,500);
+            }}
+            processNext();
+        }}
+        if(standingsRadio){{
+            standingsRadio.addEventListener('change',function(){{if(this.checked)initStandings();}});
+            if(standingsRadio.checked)initStandings();
+        }}
     }})();
 
     /* ── Summary tab ── */
