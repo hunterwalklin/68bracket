@@ -837,6 +837,11 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
     import json as _json
     blob = _json.dumps(teams_json, separators=(",", ":"))
 
+    # Save teams data for the Twitter bot
+    teams_data_path = os.path.join(PROCESSED_DIR, "teams_data.json")
+    with open(teams_data_path, "w") as f:
+        _json.dump(teams_json, f, separators=(",", ":"))
+
     return f'<div id="scores-app"></div><script>window.__SCORES_TEAMS__={blob};</script>'
 
 
