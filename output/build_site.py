@@ -1515,28 +1515,22 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         /* Tab navigation */
         .tab-radio {{ display: none; }}
-        .tab-bar {{
+        .tab-nav {{
             display: flex;
-            gap: 0;
+            align-items: stretch;
             border-bottom: 2px solid var(--border);
             margin-bottom: 2rem;
             position: sticky;
             top: 0;
             background: var(--bg);
             z-index: 10;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
-            -webkit-mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
         }}
-        .tab-bar.scrolled-end {{
-            mask-image: none;
-            -webkit-mask-image: none;
+        .tab-bar {{
+            display: flex;
+            gap: 0;
         }}
-        .tab-bar::-webkit-scrollbar {{ display: none; }}
         .tab-bar label {{
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 0.6rem;
             cursor: pointer;
             font-weight: 600;
             font-size: 0.85rem;
@@ -1545,57 +1539,107 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             margin-bottom: -2px;
             transition: color 0.15s, border-color 0.15s;
             white-space: nowrap;
-            flex-shrink: 0;
         }}
         .tab-bar label:hover {{
             color: var(--text);
         }}
+        .tab-more {{
+            position: relative;
+            flex-shrink: 0;
+            align-self: stretch;
+            display: flex;
+            align-items: stretch;
+        }}
+        .tab-more-btn {{
+            background: none;
+            border: none;
+            padding: 0.75rem 0.6rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-family: inherit;
+            white-space: nowrap;
+        }}
+        .tab-more-btn:hover {{
+            color: var(--text);
+        }}
+        .tab-more-btn.more-active {{
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            margin-bottom: -2px;
+        }}
+        .tab-more-menu {{
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 20;
+            min-width: 180px;
+            padding: 0.25rem 0;
+        }}
+        .tab-more-menu.open {{
+            display: block;
+        }}
+        .tab-more-menu label {{
+            display: block;
+            padding: 0.6rem 1rem;
+            border-bottom: none;
+            margin-bottom: 0;
+            font-size: 0.85rem;
+        }}
+        .tab-more-menu label:hover {{
+            background: var(--bg);
+        }}
         .tab-panel {{ display: none; }}
-        #tab-summary:checked ~ .tab-bar label[for="tab-summary"] {{
+        #tab-summary:checked ~ .tab-nav .tab-bar label[for="tab-summary"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-bracket:checked ~ .tab-bar label[for="tab-bracket"] {{
+        #tab-bracket:checked ~ .tab-nav .tab-bar label[for="tab-bracket"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-stats:checked ~ .tab-bar label[for="tab-stats"] {{
+        #tab-stats:checked ~ .tab-nav .tab-bar label[for="tab-stats"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-bubble:checked ~ .tab-bar label[for="tab-bubble"] {{
+        #tab-bubble:checked ~ .tab-nav .tab-bar label[for="tab-bubble"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-conf:checked ~ .tab-bar label[for="tab-conf"] {{
+        #tab-matrix:checked ~ .tab-nav .tab-bar label[for="tab-matrix"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-autobid:checked ~ .tab-bar label[for="tab-autobid"] {{
+        #tab-ranking:checked ~ .tab-nav .tab-bar label[for="tab-ranking"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-matrix:checked ~ .tab-bar label[for="tab-matrix"] {{
+        #tab-scores:checked ~ .tab-nav .tab-bar label[for="tab-scores"],
+        #tab-homecourt:checked ~ .tab-nav .tab-bar label[for="tab-homecourt"],
+        #tab-autobid:checked ~ .tab-nav .tab-bar label[for="tab-autobid"],
+        #tab-conf:checked ~ .tab-nav .tab-bar label[for="tab-conf"] {{
+            color: var(--accent);
+            font-weight: 700;
+        }}
+        #tab-scores:checked ~ .tab-nav .tab-more-btn,
+        #tab-homecourt:checked ~ .tab-nav .tab-more-btn,
+        #tab-autobid:checked ~ .tab-nav .tab-more-btn,
+        #tab-conf:checked ~ .tab-nav .tab-more-btn {{
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            margin-bottom: -2px;
+        }}
+        #tab-schedule:checked ~ .tab-nav .tab-bar label[for="tab-schedule"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-ranking:checked ~ .tab-bar label[for="tab-ranking"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
-        #tab-scores:checked ~ .tab-bar label[for="tab-scores"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
-        #tab-schedule:checked ~ .tab-bar label[for="tab-schedule"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
-        #tab-homecourt:checked ~ .tab-bar label[for="tab-homecourt"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
-        #tab-standings:checked ~ .tab-bar label[for="tab-standings"] {{
+        #tab-standings:checked ~ .tab-nav .tab-bar label[for="tab-standings"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
@@ -2329,10 +2373,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             }}
             .tab-bar::-webkit-scrollbar {{ display: none; }}
             .tab-bar label {{
-                padding: 0.6rem 0.75rem;
-                font-size: 0.8rem;
+                padding: 0.5rem 0.5rem;
+                font-size: 0.72rem;
                 white-space: nowrap;
                 flex-shrink: 0;
+            }}
+            .tab-more-btn {{
+                padding: 0.5rem 0.5rem;
+                font-size: 0.72rem;
             }}
             .stats-table {{ font-size: 0.75rem; }}
             .stats-table th {{ font-size: 0.68rem; padding: 0.4rem; }}
@@ -2689,19 +2737,26 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-homecourt" class="tab-radio">
         <input type="radio" name="tabs" id="tab-standings" class="tab-radio">
 
-        <div class="tab-bar">
-            <label for="tab-summary">Summary</label>
-            <label for="tab-bracket">Bracket</label>
-            <label for="tab-ranking">Power Rankings</label>
-            <label for="tab-scores">Scores</label>
-            <label for="tab-schedule">Schedule</label>
-            <label for="tab-homecourt">Home Court</label>
-            <label for="tab-bubble">Bubble Watch</label>
-            <label for="tab-autobid">Auto Bids</label>
-            <label for="tab-matrix">Bracket Matrix</label>
-            <label for="tab-conf">Conferences</label>
-            <label for="tab-standings">Standings</label>
-            <label for="tab-stats">Team Stats</label>
+        <div class="tab-nav">
+            <div class="tab-bar">
+                <label for="tab-summary">Summary</label>
+                <label for="tab-bracket">Bracket</label>
+                <label for="tab-bubble">Bubble Watch</label>
+                <label for="tab-schedule">Schedule</label>
+                <label for="tab-standings">Standings</label>
+                <label for="tab-matrix">Bracket Matrix</label>
+                <label for="tab-stats">Team Stats</label>
+                <label for="tab-ranking">Power Rankings</label>
+            </div>
+            <div class="tab-more">
+                <button class="tab-more-btn" type="button">More &#9662;</button>
+                <div class="tab-more-menu">
+                    <label for="tab-scores">Matchup Predictor</label>
+                    <label for="tab-homecourt">Home Court</label>
+                    <label for="tab-autobid">Auto Bids</label>
+                    <label for="tab-conf">Conferences</label>
+                </div>
+            </div>
         </div>
 
         <div id="panel-summary" class="tab-panel">
@@ -2833,6 +2888,27 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             scrollActiveTab();
             window.addEventListener('hashchange',scrollActiveTab);
         }}
+    }})();
+    /* More dropdown menu */
+    (function(){{
+        var btn=document.querySelector('.tab-more-btn');
+        var menu=document.querySelector('.tab-more-menu');
+        if(!btn||!menu)return;
+        btn.addEventListener('click',function(e){{
+            e.stopPropagation();
+            menu.classList.toggle('open');
+        }});
+        /* Close when clicking a menu item */
+        menu.querySelectorAll('label').forEach(function(label){{
+            label.addEventListener('click',function(){{
+                menu.classList.remove('open');
+            }});
+        }});
+        /* Close when clicking outside */
+        document.addEventListener('click',function(){{
+            menu.classList.remove('open');
+        }});
+        menu.addEventListener('click',function(e){{e.stopPropagation();}});
     }})();
     (function(){{
         var table=document.getElementById('stats-table');
@@ -4107,18 +4183,73 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             return html;
         }}
 
+        function renderLookahead(data){{
+            var games=parseGames(data);
+            var html='<div class="summary-narrative">';
+            var upcoming=games.filter(function(g){{return isRelevantGame(g)&&g.pred;}});
+            upcoming.sort(function(a,b){{return (b.pred?b.pred.watch:0)-(a.pred?a.pred.watch:0);}});
+
+            if(upcoming.length>0){{
+                html+='<div class="summary-sub-header">Games to Watch</div>';
+                upcoming.forEach(function(g){{
+                    var p=g.pred;
+                    var favName=p.spread>=0?g.awayName:g.homeName;
+                    var spreadAbs=Math.abs(p.spread).toFixed(1);
+                    var pct=(Math.max(p.winA,1-p.winA)*100).toFixed(0);
+                    var w=p.watch;
+                    var hue=Math.round(w*1.2);
+
+                    var stakes=[];
+                    if(seeds[g.awayName]&&seeds[g.homeName]){{
+                        stakes.push('A matchup between two projected tournament teams.');
+                    }}
+                    if(isBubble(g.awayName)){{
+                        var bl=bubbleLabels[bubbleTeams[g.awayName]];
+                        stakes.push(g.awayName+' ('+bl+') '+(seeds[g.homeName]?'has a chance at a signature win.':'needs this one.'));
+                    }}
+                    if(isBubble(g.homeName)){{
+                        var bl2=bubbleLabels[bubbleTeams[g.homeName]];
+                        stakes.push(g.homeName+' ('+bl2+') '+(seeds[g.awayName]?'has a chance at a signature win at home.':'needs this one at home.'));
+                    }}
+
+                    html+='<div class="summary-preview-card">'
+                        +'<div class="summary-matchup-line">'
+                            +ref(g.awayName,g.awayTeam)+ctx(g.awayName)
+                            +' <span class="summary-ctx">at</span> '
+                            +ref(g.homeName,g.homeTeam)+ctx(g.homeName)
+                        +'</div>';
+                    if(stakes.length>0){{
+                        html+='<div class="summary-stakes">'+stakes.join(' ')+'</div>';
+                    }}
+                    html+='<div class="summary-pred-line">'
+                        +'Prediction: '+favName+' by '+spreadAbs+' ('+pct+'%)'
+                        +' &middot; <span style="color:hsl('+hue+',70%,50%);font-weight:600">Watchability: '+w+'</span>'
+                        +'</div></div>';
+                }});
+            }} else {{
+                html+='<p class="summary-empty">No notable games on the schedule.</p>';
+            }}
+
+            html+='</div>';
+            return html;
+        }}
+
         function fetchAndRender(){{
             var today=new Date();
             var yesterday=new Date(today);
             yesterday.setDate(yesterday.getDate()-1);
+            var tomorrow=new Date(today);
+            tomorrow.setDate(tomorrow.getDate()+1);
             var todayStr=fmtDate(today);
             var yesterdayStr=fmtDate(yesterday);
+            var tomorrowStr=fmtDate(tomorrow);
 
             app.innerHTML='<div class="summary-loading">Loading daily summary...</div>';
 
             Promise.all([
                 fetch(API+'?dates='+yesterdayStr+'&limit=200&groups=50').then(function(r){{return r.json();}}),
-                fetch(API+'?dates='+todayStr+'&limit=200&groups=50').then(function(r){{return r.json();}})
+                fetch(API+'?dates='+todayStr+'&limit=200&groups=50').then(function(r){{return r.json();}}),
+                fetch(API+'?dates='+tomorrowStr+'&limit=200&groups=50').then(function(r){{return r.json();}})
             ]).then(function(results){{
                 var html='';
                 html+='<div class="summary-section">';
@@ -4128,6 +4259,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 html+='<div class="summary-section">';
                 html+='<div class="summary-section-header">Today &middot; '+displayDate(today)+'</div>';
                 html+=renderPreview(results[1]);
+                html+='</div>';
+                html+='<div class="summary-section">';
+                html+='<div class="summary-section-header">Tomorrow &middot; '+displayDate(tomorrow)+'</div>';
+                html+=renderLookahead(results[2]);
                 html+='</div>';
                 app.innerHTML=html;
             }}).catch(function(){{
