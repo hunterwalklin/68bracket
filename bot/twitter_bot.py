@@ -394,19 +394,12 @@ def compose_thread():
 # ── Posting (Bluesky) ─────────────────────────────────────────
 
 
-def get_client():
-    from atproto import Client
-    client = Client()
-    client.login(
-        os.environ["BLUESKY_HANDLE"],
-        os.environ["BLUESKY_APP_PASSWORD"],
-    )
-    return client
-
-
 def post_thread(posts):
-    from atproto import models
-    client = get_client()
+    from atproto import Client, models
+    handle = os.environ["BLUESKY_HANDLE"]
+    client = Client()
+    client.login(handle, os.environ["BLUESKY_APP_PASSWORD"])
+
     root_ref = None
     parent_ref = None
 
@@ -414,21 +407,16 @@ def post_thread(posts):
         reply_to = None
         if parent_ref and root_ref:
             reply_to = models.AppBskyFeedPost.ReplyRef(
-                parent=parent_ref,
-                root=root_ref,
+                parent=parent_ref, root=root_ref,
             )
-
         response = client.send_post(text=text, reply_to=reply_to)
         ref = models.create_strong_ref(response)
-
         if i == 0:
             root_ref = ref
         parent_ref = ref
 
         label = "Thread start" if i == 0 else f"Reply {i}"
-        print(f"  {label}: https://bsky.app/profile/{os.environ['BLUESKY_HANDLE']}/post/{response.uri.split('/')[-1]}")
-
-    return root_ref
+        print(f"  {label}: https://bsky.app/profile/{handle}/post/{response.uri.split('/')[-1]}")
 
 
 def main():
