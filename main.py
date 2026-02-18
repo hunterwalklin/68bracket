@@ -64,6 +64,21 @@ def cmd_scrape(args):
                 if os.path.exists(existing):
                     print(f"  Keeping previous {filename}")
 
+        # ESPN box scores (daily refresh — last 2 days, upsert by game_id)
+        print("\nScraping ESPN box scores (recent)...")
+        try:
+            from data.scrape_espn_box import scrape_recent, save as save_espn
+            espn_df = scrape_recent(days=2)
+            if not espn_df.empty:
+                save_espn(espn_df, upsert=True)
+            else:
+                print("  No new ESPN games found")
+        except Exception as e:
+            print(f"  Error scraping ESPN box scores: {e}")
+            existing = os.path.join(PROCESSED_DIR, "espn_box_scores.parquet")
+            if os.path.exists(existing):
+                print("  Keeping previous espn_box_scores.parquet")
+
         # Bracketology is always current-season-only
         print("\nScraping Bracket Matrix...")
         try:
@@ -104,6 +119,21 @@ def cmd_scrape(args):
                 if os.path.exists(existing):
                     print(f"  Keeping previous {filename}")
 
+        # ESPN box scores (full scrape — all seasons)
+        print("\nScraping ESPN box scores (full)...")
+        try:
+            from data.scrape_espn_box import scrape_all_seasons as scrape_espn_all, save as save_espn
+            espn_df = scrape_espn_all(seasons=seasons)
+            if not espn_df.empty:
+                save_espn(espn_df, upsert=False)
+            else:
+                print("  Warning: no ESPN box score data collected")
+        except Exception as e:
+            print(f"  Error scraping ESPN box scores: {e}")
+            existing = os.path.join(PROCESSED_DIR, "espn_box_scores.parquet")
+            if os.path.exists(existing):
+                print("  Keeping previous espn_box_scores.parquet")
+
         # Bracketology is always current-season-only
         print("\nScraping Bracket Matrix...")
         try:
@@ -128,18 +158,23 @@ def cmd_build(args):
     nitty_gritty = _load_parquet("nitty_gritty.parquet")
     torvik = _load_parquet("torvik.parquet")
     conferences = _load_parquet("conferences.parquet")
+    espn_box = _load_parquet("espn_box_scores.parquet")
 
     print("Building features...")
-    df = build_features(team_stats, tournament, nitty_gritty, torvik, conferences)
+    df = build_features(team_stats, tournament, nitty_gritty, torvik, conferences,
+                        espn_box=espn_box)
     save_features(df)
 
     # Print summary
     n_seasons = df["season"].nunique()
     n_teams = len(df)
     n_tourney = df["made_tournament"].sum()
+    hca_teams = (df.get("hca_score", pd.Series(dtype=float)) > 0).sum()
     print(f"\n  Feature matrix: {n_teams} team-seasons across {n_seasons} seasons")
     print(f"  Tournament teams: {n_tourney}")
     print(f"  Features: {len(ALL_FEATURES)}")
+    if hca_teams:
+        print(f"  Teams with KenPom HCA data: {hca_teams}")
 
 
 def cmd_train(args):

@@ -20,6 +20,17 @@ SR_TOURNAMENT_URL = SR_BASE + "/postseason/{season}-ncaa.html"
 WARRENNOLAN_NITTY_URL = "https://www.warrennolan.com/basketball/{year}/net-nitty"
 WARRENNOLAN_COMPARE_URL = "https://www.warrennolan.com/basketball/{year}/compare-rankings"
 
+# ESPN API (no auth needed)
+ESPN_SCOREBOARD_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/basketball/"
+    "mens-college-basketball/scoreboard?dates={date}&groups=50&limit=200"
+)
+ESPN_SUMMARY_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/basketball/"
+    "mens-college-basketball/summary?event={game_id}"
+)
+ESPN_REQUEST_DELAY = 0.1  # ESPN API is fast; minimal politeness delay
+
 # Bracketology
 BRACKET_MATRIX_URL = "http://www.bracketmatrix.com/"
 

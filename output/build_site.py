@@ -701,9 +701,12 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
     """Build an interactive matchup predictor with two searchable team dropdowns.
 
     Embeds team stats as JSON; spread/win% computed client-side.
+    Also embeds extended team profile data for the modal.
     """
     if stats_df is None:
         return '<p style="color: var(--text-muted);">Scores data not available. Run the predict command to generate.</p>'
+
+    has_kenpom = "hca_score" in stats_df.columns and stats_df["hca_score"].sum() > 0
 
     # Build JSON blob of all teams with valid data
     df = stats_df[stats_df["net_ranking"] > 0].copy()
@@ -720,21 +723,44 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
         road_losses = pd.to_numeric(r.get("road_losses"), errors="coerce")
         if pd.isna(adj_oe) or pd.isna(adj_de) or pd.isna(barthag):
             continue
-        # Compute HCA score (same formula as _build_homecourt_tab)
-        hca_val = 0.0
-        if pd.notna(wins) and pd.notna(road_wins) and pd.notna(losses) and pd.notna(road_losses):
-            hw = wins - road_wins
-            hl = losses - road_losses
-            hg = hw + hl
-            rg = road_wins + road_losses
-            if hg >= 3 and rg >= 3:
-                home_wp = hw / hg
-                road_wp = road_wins / rg
-                dominance = home_wp - road_wp
-                quality = max(0.0, 1 - float(net) / 200) if pd.notna(net) else 0.0
-                hca_val = dominance * 0.65 + quality * 0.35
+
+        # Use KenPom HCA if available, else fallback to legacy formula
+        if has_kenpom:
+            hca_val = float(r.get("hca_score", 0) or 0)
+        else:
+            hca_val = 0.0
+            if pd.notna(wins) and pd.notna(road_wins) and pd.notna(losses) and pd.notna(road_losses):
+                hw = wins - road_wins
+                hl = losses - road_losses
+                hg = hw + hl
+                rg = road_wins + road_losses
+                if hg >= 3 and rg >= 3:
+                    home_wp = hw / hg
+                    road_wp = road_wins / rg
+                    dominance = home_wp - road_wp
+                    quality = max(0.0, 1 - float(net) / 200) if pd.notna(net) else 0.0
+                    hca_val = dominance * 0.65 + quality * 0.35
+
         espn_id = _ESPN_LOGOS.get(str(r.get("school_id", "")), "")
-        teams_json.append({
+
+        # Home/road record for profile — prefer ESPN data, fallback to WarrenNolan
+        _ehw = r.get("espn_home_wins", 0)
+        _ehl = r.get("espn_home_losses", 0)
+        _erw = r.get("espn_road_wins", 0)
+        _erl = r.get("espn_road_losses", 0)
+        espn_hw = int(_ehw) if pd.notna(_ehw) else 0
+        espn_hl = int(_ehl) if pd.notna(_ehl) else 0
+        espn_rw = int(_erw) if pd.notna(_erw) else 0
+        espn_rl = int(_erl) if pd.notna(_erl) else 0
+        if espn_hw + espn_hl + espn_rw + espn_rl > 0:
+            hw, hl, rw, rl = espn_hw, espn_hl, espn_rw, espn_rl
+        else:
+            hw = int(wins - road_wins) if pd.notna(wins) and pd.notna(road_wins) else 0
+            hl = int(losses - road_losses) if pd.notna(losses) and pd.notna(road_losses) else 0
+            rw = int(road_wins) if pd.notna(road_wins) else 0
+            rl = int(road_losses) if pd.notna(road_losses) else 0
+
+        team_data = {
             "name": str(r.get("team", "")),
             "conf": str(r.get("conference", "")),
             "espn": espn_id,
@@ -745,7 +771,36 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
             "net": int(net) if pd.notna(net) else 999,
             "rec": f"{int(wins)}-{int(losses)}" if pd.notna(wins) and pd.notna(losses) else "",
             "hca": round(hca_val, 3),
-        })
+            # Extended profile fields
+            "homeRec": f"{hw}-{hl}",
+            "roadRec": f"{rw}-{rl}",
+            "srs": round(float(r.get("srs", 0) or 0), 2),
+            "sor": int(r.get("sor", 0) or 0),
+            "kpi": int(r.get("kpi", 0) or 0),
+            "bpi": int(r.get("bpi", 0) or 0),
+            "pom": int(r.get("pom", 0) or 0),
+            "wab": round(float(r.get("wab", 0) or 0), 1),
+        }
+
+        # Quadrant records
+        for q in ["q1", "q2", "q3", "q4"]:
+            qw = int(r.get(f"{q}_wins", 0) or 0)
+            ql = int(r.get(f"{q}_losses", 0) or 0)
+            team_data[q] = f"{qw}-{ql}"
+
+        # HCA breakdown (KenPom)
+        if has_kenpom:
+            team_data["hcaPts"] = round(float(r.get("hca_points", 3.5) or 3.5), 1)
+            team_data["hcaFoul"] = round(float(r.get("foul_advantage", 0) or 0), 2)
+            team_data["hcaScoring"] = round(float(r.get("scoring_advantage", 0) or 0), 1)
+            team_data["hcaTO"] = round(float(r.get("turnover_advantage", 0) or 0), 2)
+            team_data["hcaBlk"] = round(float(r.get("block_advantage", 0) or 0), 2)
+            team_data["homePtsM"] = round(float(r.get("home_pts_margin", 0) or 0), 1)
+            team_data["roadPtsM"] = round(float(r.get("road_pts_margin", 0) or 0), 1)
+            team_data["homeFoulM"] = round(float(r.get("home_foul_margin", 0) or 0), 1)
+            team_data["roadFoulM"] = round(float(r.get("road_foul_margin", 0) or 0), 1)
+
+        teams_json.append(team_data)
 
     teams_json.sort(key=lambda t: t["net"])
     import json as _json
@@ -762,35 +817,141 @@ def _build_schedule_tab(stats_df: pd.DataFrame) -> str:
 
 
 def _build_homecourt_tab(stats_df: pd.DataFrame) -> str:
-    """Rank teams by home court advantage score."""
+    """Rank teams by KenPom-style home court advantage score.
+
+    Uses ESPN box score data (fouls, turnovers, blocks, scoring margin)
+    when available, falls back to the old win% formula otherwise.
+    """
     if stats_df is None:
         return '<p style="color: var(--text-muted);">Home Court data not available. Run the predict command to generate.</p>'
 
+    has_kenpom = "hca_score" in stats_df.columns and stats_df["hca_score"].sum() > 0
+
+    if has_kenpom:
+        return _build_homecourt_tab_kenpom(stats_df)
+    else:
+        return _build_homecourt_tab_legacy(stats_df)
+
+
+def _build_homecourt_tab_kenpom(stats_df: pd.DataFrame) -> str:
+    """KenPom-style HCA table with component columns."""
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+    df = df[df["hca_score"] > 0].copy()
+
+    if df.empty:
+        return _build_homecourt_tab_legacy(stats_df)
+
+    df = df.sort_values("hca_score", ascending=False).reset_index(drop=True)
+
+    def _color_val(val, invert=False):
+        """Color a component value green (good) or red (bad)."""
+        v = float(val)
+        if invert:
+            v = -v
+        if v > 0.5:
+            return "color: var(--green);"
+        elif v < -0.5:
+            return "color: var(--red);"
+        return ""
+
+    rows = ""
+    for i, r in df.iterrows():
+        score = float(r.get("hca_score", 0))
+        hca_pts = float(r.get("hca_points", 3.5))
+        foul = float(r.get("foul_advantage", 0))
+        scoring = float(r.get("scoring_advantage", 0))
+        to_adv = float(r.get("turnover_advantage", 0))
+        blk = float(r.get("block_advantage", 0))
+
+        # Color the HCA score percentile
+        hue = int(score * 120)
+        score_style = f"color: hsl({hue}, 70%, 50%);"
+
+        # Color HCA points
+        pts_diff = hca_pts - 3.5
+        if pts_diff > 0.5:
+            pts_style = "color: var(--green);"
+        elif pts_diff < -0.5:
+            pts_style = "color: var(--red);"
+        else:
+            pts_style = ""
+
+        # Use ESPN-derived records (available for all teams) with WarrenNolan fallback
+        _ehw = r.get("espn_home_wins", 0)
+        _ehl = r.get("espn_home_losses", 0)
+        _erw = r.get("espn_road_wins", 0)
+        _erl = r.get("espn_road_losses", 0)
+        hw = int(_ehw) if pd.notna(_ehw) else 0
+        hl = int(_ehl) if pd.notna(_ehl) else 0
+        rw = int(_erw) if pd.notna(_erw) else 0
+        rl = int(_erl) if pd.notna(_erl) else 0
+        if hw == 0 and hl == 0 and rw == 0 and rl == 0:
+            # Fallback to WarrenNolan-derived records
+            _w = r.get("wins", 0)
+            _l = r.get("losses", 0)
+            _rw = r.get("road_wins", 0)
+            _rl = r.get("road_losses", 0)
+            hw = int(_w) - int(_rw) if pd.notna(_w) and pd.notna(_rw) else 0
+            hl = int(_l) - int(_rl) if pd.notna(_l) and pd.notna(_rl) else 0
+            rw = int(_rw) if pd.notna(_rw) else 0
+            rl = int(_rl) if pd.notna(_rl) else 0
+
+        logo = _team_logo(str(r.get("school_id", "")))
+        rows += (
+            f"<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td class='stats-team'>{logo}{escape(str(r.get('team', '')))}</td>"
+            f"<td>{escape(str(r.get('conference', '')))}</td>"
+            f"<td>{hw}-{hl}</td>"
+            f"<td>{rw}-{rl}</td>"
+            f"<td style='{score_style} font-weight:600;'>{score:.2f}</td>"
+            f"<td style='{pts_style} font-weight:600;'>{hca_pts:+.1f}</td>"
+            f"<td style='{_color_val(foul)}'>{foul:+.2f}</td>"
+            f"<td style='{_color_val(scoring)}'>{scoring:+.1f}</td>"
+            f"<td style='{_color_val(to_adv)}'>{to_adv:+.2f}</td>"
+            f"<td style='{_color_val(blk)}'>{blk:+.2f}</td>"
+            f"<td>{int(r['net_ranking'])}</td>"
+            f"</tr>\n"
+        )
+
+    return f"""<div class="stats-scroll"><table class="stats-table" id="homecourt-table">
+<thead><tr>
+    <th data-sort="num">#</th><th data-sort="str">Team</th><th data-sort="str">Conf</th>
+    <th data-sort="str">Home</th><th data-sort="str">Road</th>
+    <th data-sort="num">HCA Score</th><th data-sort="num">HCA Pts</th>
+    <th data-sort="num">Fouls</th><th data-sort="num">Scoring</th>
+    <th data-sort="num">TOs</th><th data-sort="num">Blocks</th><th data-sort="num">NET</th>
+</tr></thead>
+<tbody>
+{rows}</tbody>
+</table></div>"""
+
+
+def _build_homecourt_tab_legacy(stats_df: pd.DataFrame) -> str:
+    """Fallback HCA table using win% formula (no ESPN data)."""
     df = stats_df[stats_df["net_ranking"] > 0].copy()
 
-    # Derive home record (home + neutral approx)
     df["home_wins"] = df["wins"] - df["road_wins"]
     df["home_losses"] = df["losses"] - df["road_losses"]
     df["home_games"] = df["home_wins"] + df["home_losses"]
     df["road_games"] = df["road_wins"] + df["road_losses"]
 
-    # Filter: at least 3 home and 3 road games
     df = df[(df["home_games"] >= 3) & (df["road_games"] >= 3)].copy()
 
     df["home_wp"] = df["home_wins"] / df["home_games"]
     df["road_wp"] = df["road_wins"] / df["road_games"]
     df["dominance"] = df["home_wp"] - df["road_wp"]
     df["quality"] = (1 - df["net_ranking"] / 200).clip(lower=0)
-    df["hca_score"] = df["dominance"] * 0.65 + df["quality"] * 0.35
+    df["hca_score_legacy"] = df["dominance"] * 0.65 + df["quality"] * 0.35
 
-    df = df.sort_values("hca_score", ascending=False).reset_index(drop=True)
+    df = df.sort_values("hca_score_legacy", ascending=False).reset_index(drop=True)
 
-    score_min = df["hca_score"].min()
-    score_max = df["hca_score"].max()
+    score_min = df["hca_score_legacy"].min()
+    score_max = df["hca_score_legacy"].max()
 
     rows = ""
     for i, r in df.iterrows():
-        score = float(r["hca_score"])
+        score = float(r["hca_score_legacy"])
         if score_max != score_min:
             t = (score - score_min) / (score_max - score_min)
         else:
@@ -989,7 +1150,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         def _bubble_row(label: str, teams_str: str, css_class: str) -> str:
             teams = [t.strip() for t in teams_str.split(", ")]
             items = "".join(
-                f'<span class="bubble-team">{_team_logo(_name_to_sid.get(t, ""))}{escape(t)}</span>'
+                f'<span class="bubble-team stats-team" data-team="{escape(t)}">{_team_logo(_name_to_sid.get(t, ""))}{escape(t)}</span>'
                 for t in teams
             )
             return f'<div class="bubble-row {css_class}"><div class="bubble-label">{label}</div><div class="bubble-teams">{items}</div></div>'
@@ -1014,7 +1175,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             is_play_in = t.endswith("*")
             clean_name = t[:-1] if is_play_in else t
             logo = _team_logo(_name_to_sid.get(clean_name, ""))
-            styled.append(logo + _style_team(clean_name, changes, is_play_in))
+            styled.append(f'<span class="stats-team" data-team="{escape(clean_name)}">{logo}{_style_team(clean_name, changes, is_play_in)}</span>')
         seed_table_rows += f"<tr><td class='seed-num'>{seed}</td><td>{', '.join(styled)}</td></tr>\n"
 
     first_four_html = ""
@@ -1025,7 +1186,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             ff_seed, ff_t1, ff_t2, ff_region = ff_match.groups()
             ff_logo1 = _team_logo(_name_to_sid.get(ff_t1.strip(), ""))
             ff_logo2 = _team_logo(_name_to_sid.get(ff_t2.strip(), ""))
-            first_four_html += f"<li>({ff_seed}) {ff_logo1}{escape(ff_t1)} vs {ff_logo2}{escape(ff_t2)} [{ff_region}]</li>\n"
+            first_four_html += f'<li>({ff_seed}) <span class="stats-team" data-team="{escape(ff_t1)}">{ff_logo1}{escape(ff_t1)}</span> vs <span class="stats-team" data-team="{escape(ff_t2)}">{ff_logo2}{escape(ff_t2)}</span> [{ff_region}]</li>\n'
         else:
             first_four_html += f"<li>{escape(game)}</li>\n"
 
@@ -1045,7 +1206,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 logo = ""
             # Escape & in team names for HTML
             safe_name = team_name.replace("&", "&amp;")
-            return f'{logo}({seed}) {safe_name} '
+            data_name = team_name.replace("&", "&amp;").replace('"', "&quot;")
+            return f'<span class="stats-team" data-team="{data_name}">{logo}({seed}) {safe_name}</span> '
         processed_art = re.sub(
             r'\((\d+)\) (.+?) (?=─)',
             _bracket_logo_sub,
@@ -1849,6 +2011,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
         .stats-team {{
             font-weight: 600;
+            cursor: pointer;
+        }}
+        .stats-team:hover {{
+            color: var(--accent);
         }}
         .team-logo {{
             width: 20px;
@@ -1982,6 +2148,320 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             .sched-team img {{ width: 24px; height: 24px; }}
             .sched-nav .sched-date {{ min-width: 160px; font-size: 0.95rem; }}
         }}
+
+        /* ── Team Profile (Full Page) ── */
+        .modal-overlay {{
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: var(--bg);
+            overflow-y: auto;
+        }}
+        .modal-overlay.active {{ display: block; }}
+        .modal-box {{
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem 1.5rem 3rem;
+            position: relative;
+            min-height: 100vh;
+        }}
+        .modal-box.compare-mode {{ max-width: 900px; }}
+        .modal-close {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 0.35rem 0.75rem;
+            margin-bottom: 1rem;
+        }}
+        .modal-close:hover {{ color: var(--text); border-color: var(--text-muted); }}
+        .modal-header {{
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }}
+        .modal-header img {{ width: 64px; height: 64px; }}
+        .modal-header .team-info h2 {{ margin: 0; font-size: 1.5rem; color: var(--text); }}
+        .modal-header .team-info .meta {{ color: var(--text-muted); font-size: 0.9rem; }}
+        .modal-stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }}
+        .modal-stat {{
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            text-align: center;
+        }}
+        .modal-stat .label {{ font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }}
+        .modal-stat .value {{ font-size: 1rem; font-weight: 600; color: var(--text); margin-top: 2px; }}
+        .modal-section {{ margin-bottom: 1rem; }}
+        .modal-section h3 {{ font-size: 0.9rem; color: var(--text-muted); margin: 0 0 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .quad-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.4rem;
+        }}
+        .quad-cell {{
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.35rem 0.5rem;
+            text-align: center;
+            font-size: 0.85rem;
+        }}
+        .quad-cell .qlabel {{ font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }}
+        .quad-cell .qval {{ font-weight: 600; color: var(--text); }}
+        .hca-bars {{ display: flex; flex-direction: column; gap: 0.4rem; }}
+        .hca-bar-row {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        .hca-bar-label {{ width: 70px; font-size: 0.8rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }}
+        .hca-bar-track {{
+            flex: 1;
+            height: 18px;
+            background: var(--bg);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }}
+        .hca-bar-fill {{
+            position: absolute;
+            top: 0;
+            height: 100%;
+            border-radius: 4px;
+            min-width: 2px;
+        }}
+        .hca-bar-fill.positive {{ background: var(--green); left: 50%; }}
+        .hca-bar-fill.negative {{ background: var(--red); right: 50%; }}
+        .hca-bar-center {{
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--border);
+        }}
+        .hca-bar-val {{ width: 50px; font-size: 0.8rem; color: var(--text); font-weight: 600; }}
+        .modal-btn {{
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.85rem;
+            cursor: pointer;
+        }}
+        .modal-btn:hover {{ border-color: var(--accent); color: var(--accent); }}
+        .compare-search {{
+            position: relative;
+            margin-top: 0.5rem;
+        }}
+        .compare-search input {{
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }}
+        .compare-search input::placeholder {{ color: var(--text-muted); }}
+        .compare-search .results {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }}
+        .compare-search .results.show {{ display: block; }}
+        .compare-search .results div {{
+            padding: 0.4rem 0.6rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        .compare-search .results div:hover {{ background: var(--bg); }}
+        .compare-search .results img {{ width: 20px; height: 20px; }}
+        .compare-layout {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }}
+        .compare-layout .compare-col {{ min-width: 0; }}
+        .compare-stat-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }}
+        .compare-stat-row .stat-label {{ color: var(--text-muted); flex: 1; text-align: center; }}
+        .compare-stat-row .stat-val {{ flex: 1; font-weight: 600; }}
+        .compare-stat-row .stat-val.left {{ text-align: right; padding-right: 0.5rem; }}
+        .compare-stat-row .stat-val.right {{ text-align: left; padding-left: 0.5rem; }}
+        .compare-stat-row .stat-val.better {{ color: var(--green); }}
+        .compare-matchup {{
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-top: 0.75rem;
+        }}
+        .compare-matchup h4 {{ margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }}
+        .venue-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            font-size: 0.85rem;
+        }}
+        .venue-row .venue {{ color: var(--text-muted); flex: 1; }}
+        .venue-row .spread {{ flex: 1; text-align: center; font-weight: 600; color: var(--accent); }}
+        .venue-row .winpct {{ flex: 1; text-align: right; color: var(--text); }}
+        /* ── Team Schedule ── */
+        .team-sched-row {{ border-bottom: 1px solid var(--border); }}
+        .team-sched-row:last-child {{ border-bottom: none; }}
+        .team-sched-game {{
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 0;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }}
+        .team-sched-game:hover {{ opacity: 0.8; }}
+        .team-sched-date {{
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            width: 70px;
+            flex-shrink: 0;
+        }}
+        .team-sched-opp {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 0;
+        }}
+        .team-sched-opp img {{ width: 24px; height: 24px; flex-shrink: 0; }}
+        .team-sched-opp .opp-name {{
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .team-sched-venue {{
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            width: 32px;
+            text-align: center;
+            flex-shrink: 0;
+        }}
+        .team-sched-result {{
+            width: 80px;
+            text-align: right;
+            font-weight: 600;
+            flex-shrink: 0;
+        }}
+        .team-sched-result.win {{ color: var(--green); }}
+        .team-sched-result.loss {{ color: var(--red); }}
+        .team-sched-loading {{
+            color: var(--text-muted);
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 0.85rem;
+        }}
+        /* ── Box Score ── */
+        .box-score {{
+            display: none;
+            padding: 0.5rem 0 0.75rem;
+        }}
+        .box-score.open {{ display: block; }}
+        .box-score-team {{
+            margin-bottom: 0.75rem;
+        }}
+        .box-score-team:last-child {{ margin-bottom: 0; }}
+        .box-team-header {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-bottom: 0.35rem;
+            color: var(--text);
+        }}
+        .box-team-header img {{ width: 20px; height: 20px; }}
+        .box-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.7rem;
+        }}
+        .box-table th {{
+            text-align: right;
+            padding: 0.2rem 0.3rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }}
+        .box-table th:first-child {{ text-align: left; }}
+        .box-table td {{
+            text-align: right;
+            padding: 0.2rem 0.3rem;
+            color: var(--text);
+            white-space: nowrap;
+        }}
+        .box-table td:first-child {{
+            text-align: left;
+            font-weight: 500;
+            max-width: 110px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .box-table tr.box-totals td {{
+            border-top: 1px solid var(--border);
+            font-weight: 600;
+        }}
+        .box-table tr.box-bench td:first-child {{
+            color: var(--text-muted);
+            font-style: italic;
+        }}
+        .box-score-loading {{
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 0.5rem 0;
+        }}
+        @media (max-width: 640px) {{
+            .modal-box {{ padding: 1rem 1rem 2rem; }}
+            .modal-stats-grid {{ grid-template-columns: repeat(3, 1fr); }}
+            .compare-layout {{ grid-template-columns: 1fr; }}
+            .team-sched-date {{ width: 55px; font-size: 0.7rem; }}
+            .team-sched-result {{ width: 65px; }}
+            .box-table {{ font-size: 0.6rem; }}
+            .box-table td:first-child {{ max-width: 80px; }}
+        }}
     </style>
 </head>
 <body>
@@ -2094,6 +2574,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-homecourt" class="tab-panel">
             <h2>Home Court Rankings</h2>
             {homecourt_tab_html if homecourt_tab_html else '<p style="color: var(--text-muted);">Home Court data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <!-- Team Profile Modal -->
+        <div id="team-modal" class="modal-overlay">
+            <div class="modal-box" id="modal-content"></div>
         </div>
 
         <div class="footnote">
@@ -2449,9 +2934,9 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var venueLabel=venue==='homeA'?'@ '+a.name:venue==='homeB'?'@ '+b.name:'Neutral Court';
 
             res.innerHTML='<div class="scores-matchup">'
-                +'<div class="scores-team-card">'+imgA+'<div class="tc-name">'+a.name+'</div><div class="tc-meta">'+a.conf+' &middot; '+a.rec+'</div><div class="tc-pct" style="color:hsl('+hueA+',70%,50%)">'+pctA+'%</div></div>'
+                +'<div class="scores-team-card">'+imgA+'<div class="tc-name stats-team" data-team="'+a.name+'">'+a.name+'</div><div class="tc-meta">'+a.conf+' &middot; '+a.rec+'</div><div class="tc-pct" style="color:hsl('+hueA+',70%,50%)">'+pctA+'%</div></div>'
                 +'<div class="scores-vs">vs</div>'
-                +'<div class="scores-team-card">'+imgB+'<div class="tc-name">'+b.name+'</div><div class="tc-meta">'+b.conf+' &middot; '+b.rec+'</div><div class="tc-pct" style="color:hsl('+hueB+',70%,50%)">'+pctB+'%</div></div>'
+                +'<div class="scores-team-card">'+imgB+'<div class="tc-name stats-team" data-team="'+b.name+'">'+b.name+'</div><div class="tc-meta">'+b.conf+' &middot; '+b.rec+'</div><div class="tc-pct" style="color:hsl('+hueB+',70%,50%)">'+pctB+'%</div></div>'
                 +'</div>'
                 +'<div class="scores-venue">'+venueLabel+'</div>'
                 +'<div class="scores-spread">'+favName+' by '+spreadAbs+'</div>'
@@ -2495,13 +2980,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
             var ptsA=(a.oe+b.de)/2*posFactor;
             var ptsB=(b.oe+a.de)/2*posFactor;
-            /* Home court advantage scaled by team's HCA score from Home Court rankings.
-               HCA score ~0.67 (top) → ~5 pts, ~0.3 (mid) → ~3 pts, ~0 (bottom) → ~1 pt */
+            /* Home court advantage: use KenPom hcaPts if available, else legacy formula */
             if(homeId){{
                 var homeTeam=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
                 if(homeTeam){{
-                    var h=homeTeam.hca||0;
-                    var pts=h*6+1; /* 0→1pt, 0.33→3pt, 0.67→5pt */
+                    var pts=homeTeam.hcaPts!==undefined?homeTeam.hcaPts:(homeTeam.hca*6+1);
                     if(pts<0.5)pts=0.5;
                     var half=pts/2;
                     if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
@@ -2638,16 +3121,20 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     watchHtml='<div class="sched-watch" style="color:hsl('+hue+',70%,50%)" title="Watchability: '+w+'/100">'+w+'</div>';
                 }}
 
+                var awayDataTeam=g.awayTeam?g.awayTeam.name:'';
+                var homeDataTeam=g.homeTeam?g.homeTeam.name:'';
+                var awayTeamCls=awayDataTeam?'sched-team-name stats-team':'sched-team-name';
+                var homeTeamCls=homeDataTeam?'sched-team-name stats-team':'sched-team-name';
                 html+='<div class="sched-game'+liveCls+'">'
                     +watchHtml
                     +'<div class="sched-team away">'
-                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.awayName+'</div><div class="sched-venue-tag">Away</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="'+awayTeamCls+'"'+(awayDataTeam?' data-team="'+awayDataTeam+'"':'')+'>'+g.awayName+'</div><div class="sched-venue-tag">Away</div>'+(awayMeta?'<div class="sched-team-meta">'+awayMeta+'</div>':'')+'</div>'
                         +awayImg
                     +'</div>'
                     +'<div class="sched-center">'+centerHtml+'</div>'
                     +'<div class="sched-team home">'
                         +homeImg
-                        +'<div class="sched-team-info"><div class="sched-team-name">'+g.homeName+'</div><div class="sched-venue-tag">Home</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
+                        +'<div class="sched-team-info"><div class="'+homeTeamCls+'"'+(homeDataTeam?' data-team="'+homeDataTeam+'"':'')+'>'+g.homeName+'</div><div class="sched-venue-tag">Home</div>'+(homeMeta?'<div class="sched-team-meta">'+homeMeta+'</div>':'')+'</div>'
                     +'</div>'
                     +'</div>';
             }});
@@ -2774,6 +3261,461 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             if(!schedRadio||!schedRadio.checked)return;
             if(e.key==='ArrowLeft')shiftDate(-1);
             else if(e.key==='ArrowRight')shiftDate(1);
+        }});
+    }})();
+
+    /* ── Team Profile Modal ── */
+    (function(){{
+        var overlay=document.getElementById('team-modal');
+        var box=document.getElementById('modal-content');
+        if(!overlay||!box)return;
+        var teams=window.__SCORES_TEAMS__||[];
+
+        function findTeam(name){{
+            for(var i=0;i<teams.length;i++){{
+                if(teams[i].name===name)return teams[i];
+            }}
+            return null;
+        }}
+
+        function espnLogo(id,sz){{
+            if(!id)return '';
+            sz=sz||40;
+            return '<img src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/'+id+'.png&h='+sz+'&w='+sz+'" alt="" loading="lazy">';
+        }}
+
+        function statCard(label,val){{
+            return '<div class="modal-stat"><div class="label">'+label+'</div><div class="value">'+val+'</div></div>';
+        }}
+
+        function hcaBar(label,val,maxAbs){{
+            maxAbs=maxAbs||5;
+            var pct=Math.min(Math.abs(val)/maxAbs*50,50);
+            var cls=val>=0?'positive':'negative';
+            var fill='<div class="hca-bar-fill '+cls+'" style="width:'+pct+'%"></div>';
+            return '<div class="hca-bar-row">'
+                +'<div class="hca-bar-label">'+label+'</div>'
+                +'<div class="hca-bar-track"><div class="hca-bar-center"></div>'+fill+'</div>'
+                +'<div class="hca-bar-val">'+(val>=0?'+':'')+val.toFixed(2)+'</div>'
+                +'</div>';
+        }}
+
+        var schedCache={{}};
+        var SCHED_CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
+        var SCHED_API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/';
+
+        function fetchTeamSchedule(t){{
+            var container=document.getElementById('team-schedule-container');
+            if(!container||!t.espn){{
+                if(container)container.innerHTML='<div class="team-sched-loading">Schedule not available.</div>';
+                return;
+            }}
+            if(schedCache[t.espn]){{
+                container.innerHTML=renderSchedule(schedCache[t.espn],t);
+                return;
+            }}
+            var now=new Date();
+            var yr=now.getMonth()>=7?now.getFullYear()+1:now.getFullYear();
+            fetch(SCHED_API+t.espn+'/schedule?season='+yr)
+                .then(function(r){{return r.json();}})
+                .then(function(data){{
+                    schedCache[t.espn]=data;
+                    var c=document.getElementById('team-schedule-container');
+                    if(c)c.innerHTML=renderSchedule(data,t);
+                }})
+                .catch(function(){{
+                    var c=document.getElementById('team-schedule-container');
+                    if(c)c.innerHTML='<div class="team-sched-loading">Failed to load schedule.</div>';
+                }});
+        }}
+
+        function renderSchedule(data,team){{
+            var events=data.events||[];
+            if(events.length===0)return '<div class="team-sched-loading">No games found.</div>';
+            var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var html='';
+            events.forEach(function(ev){{
+                var comp=ev.competitions&&ev.competitions[0];
+                if(!comp)return;
+                var competitors=comp.competitors||[];
+                var us=null,them=null;
+                var ourId=String(team.espn);
+                competitors.forEach(function(c){{
+                    var cId=c.team?String(c.team.id):String(c.id||'');
+                    if(cId===ourId)us=c;
+                    else them=c;
+                }});
+                if(!us||!them)return;
+                var isHome=us.homeAway==='home';
+                var oppName=them.team?(them.team.shortDisplayName||them.team.displayName||'TBD'):'TBD';
+                var oppId=them.team?String(them.team.id):'';
+                var oppLogo=oppId?'<img src="'+SCHED_CDN+oppId+'.png&h=24&w=24" alt="" loading="lazy">':'';
+                var dateStr='';
+                try{{
+                    var d=new Date(ev.date||comp.date);
+                    dateStr=months[d.getMonth()]+' '+d.getDate();
+                }}catch(e){{}}
+                var status=comp.status||{{}};
+                var statusType=status.type||{{}};
+                var state=statusType.state||'pre';
+                var resultHtml='',resultCls='';
+                function getScore(c){{
+                    if(!c.score)return 0;
+                    if(typeof c.score==='object')return parseInt(c.score.displayValue||c.score.value)||0;
+                    return parseInt(c.score)||0;
+                }}
+                if(state==='post'){{
+                    var usScore=getScore(us);
+                    var themScore=getScore(them);
+                    var won=us.winner===true||(us.winner===undefined&&usScore>themScore);
+                    resultCls=won?'win':'loss';
+                    resultHtml=(won?'W':'L')+' '+usScore+'-'+themScore;
+                }}else if(state==='in'){{
+                    resultHtml='<span style="color:var(--accent)">LIVE</span> '+getScore(us)+'-'+getScore(them);
+                }}else{{
+                    var detail=statusType.shortDetail||'';
+                    resultHtml='<span style="color:var(--text-muted)">'+detail+'</span>';
+                }}
+                var venue=isHome?'vs':'@';
+                var evId=ev.id||'';
+                var canExpand=state==='post'||state==='in';
+                html+='<div class="team-sched-row" data-eid="'+evId+'">';
+                html+='<div class="team-sched-game">';
+                html+='<div class="team-sched-date">'+dateStr+'</div>';
+                html+='<div class="team-sched-venue">'+venue+'</div>';
+                html+='<div class="team-sched-opp">'+oppLogo+'<span class="opp-name">'+oppName+'</span></div>';
+                html+='<div class="team-sched-result '+resultCls+'">'+resultHtml+'</div>';
+                html+='</div>';
+                if(canExpand)html+='<div class="box-score" id="box-'+evId+'"></div>';
+                html+='</div>';
+            }});
+            return html||'<div class="team-sched-loading">No games found.</div>';
+        }}
+
+        var boxCache={{}};
+        var BOX_API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=';
+        var BOX_COLS=['MIN','PTS','FG','3PT','FT','REB','AST','STL','BLK','TO','PF'];
+        var BOX_IDX=null;
+
+        function toggleBoxScore(eid){{
+            var el=document.getElementById('box-'+eid);
+            if(!el)return;
+            if(el.classList.contains('open')){{
+                el.classList.remove('open');
+                return;
+            }}
+            el.classList.add('open');
+            if(boxCache[eid]){{
+                el.innerHTML=renderBoxScore(boxCache[eid]);
+                return;
+            }}
+            el.innerHTML='<div class="box-score-loading">Loading box score...</div>';
+            fetch(BOX_API+eid)
+                .then(function(r){{return r.json();}})
+                .then(function(data){{
+                    boxCache[eid]=data;
+                    var b=document.getElementById('box-'+eid);
+                    if(b)b.innerHTML=renderBoxScore(data);
+                }})
+                .catch(function(){{
+                    var b=document.getElementById('box-'+eid);
+                    if(b)b.innerHTML='<div class="box-score-loading">Failed to load box score.</div>';
+                }});
+        }}
+
+        function renderBoxScore(data){{
+            var bs=data.boxscore;
+            if(!bs||!bs.players)return '<div class="box-score-loading">No box score available.</div>';
+            var html='';
+            bs.players.forEach(function(pt){{
+                var tname=pt.team?(pt.team.shortDisplayName||pt.team.displayName||''):'';
+                var tid=pt.team?String(pt.team.id):'';
+                var tlogo=tid?'<img src="'+SCHED_CDN+tid+'.png&h=20&w=20" alt="" loading="lazy">':'';
+                var stats=pt.statistics&&pt.statistics[0];
+                if(!stats)return;
+                var labels=stats.labels||[];
+                /* Map our display columns to API label indices */
+                if(!BOX_IDX){{
+                    BOX_IDX={{}};
+                    for(var i=0;i<labels.length;i++)BOX_IDX[labels[i]]=i;
+                }}
+                html+='<div class="box-score-team">';
+                html+='<div class="box-team-header">'+tlogo+tname+'</div>';
+                html+='<table class="box-table"><thead><tr><th>Player</th>';
+                for(var c=0;c<BOX_COLS.length;c++)html+='<th>'+BOX_COLS[c]+'</th>';
+                html+='</tr></thead><tbody>';
+                var athletes=stats.athletes||[];
+                var sawBench=false;
+                athletes.forEach(function(a){{
+                    var pname=a.athlete?(a.athlete.shortName||a.athlete.displayName||''):'';
+                    var pstats=a.stats||[];
+                    var isBench=a.starter===false;
+                    var trCls=isBench?'box-bench':'';
+                    if(isBench&&!sawBench){{
+                        sawBench=true;
+                        html+='<tr class="box-bench"><td colspan="'+(BOX_COLS.length+1)+'" style="color:var(--text-muted);font-size:0.65rem;padding-top:0.3rem;">BENCH</td></tr>';
+                    }}
+                    html+='<tr class="'+trCls+'"><td>'+pname+'</td>';
+                    for(var c=0;c<BOX_COLS.length;c++){{
+                        var idx=BOX_IDX[BOX_COLS[c]];
+                        html+='<td>'+(idx!==undefined&&pstats[idx]!==undefined?pstats[idx]:'—')+'</td>';
+                    }}
+                    html+='</tr>';
+                }});
+                /* Totals row */
+                var totals=stats.totals||[];
+                if(totals.length){{
+                    html+='<tr class="box-totals"><td>TOTAL</td>';
+                    for(var c=0;c<BOX_COLS.length;c++){{
+                        var idx=BOX_IDX[BOX_COLS[c]];
+                        html+='<td>'+(idx!==undefined&&totals[idx]!==undefined?totals[idx]:'—')+'</td>';
+                    }}
+                    html+='</tr>';
+                }}
+                html+='</tbody></table></div>';
+            }});
+            return html||'<div class="box-score-loading">No box score available.</div>';
+        }}
+
+        function renderProfile(t){{
+            var h='<button class="modal-close" id="modal-close-btn">&larr; Back</button>';
+            h+='<div class="modal-header">';
+            h+=espnLogo(t.espn,64);
+            h+='<div class="team-info"><h2>'+t.name+'</h2>';
+            h+='<div class="meta">'+t.conf+' &middot; '+t.rec+'</div></div></div>';
+
+            h+='<div class="modal-stats-grid">';
+            h+=statCard('NET',t.net);
+            h+=statCard('KenPom',t.pom||'—');
+            h+=statCard('SOR',t.sor||'—');
+            h+=statCard('KPI',t.kpi||'—');
+            h+=statCard('BPI',t.bpi||'—');
+            h+=statCard('WAB',t.wab!==undefined?t.wab.toFixed(1):'—');
+            h+=statCard('AdjOE',t.oe);
+            h+=statCard('AdjDE',t.de);
+            h+=statCard('Barthag',t.bar);
+            h+='</div>';
+
+            h+='<div class="modal-section"><h3>Records</h3>';
+            h+='<div class="quad-grid">';
+            h+='<div class="quad-cell"><div class="qlabel">Q1</div><div class="qval">'+(t.q1||'—')+'</div></div>';
+            h+='<div class="quad-cell"><div class="qlabel">Q2</div><div class="qval">'+(t.q2||'—')+'</div></div>';
+            h+='<div class="quad-cell"><div class="qlabel">Q3</div><div class="qval">'+(t.q3||'—')+'</div></div>';
+            h+='<div class="quad-cell"><div class="qlabel">Q4</div><div class="qval">'+(t.q4||'—')+'</div></div>';
+            h+='<div class="quad-cell"><div class="qlabel">Home</div><div class="qval">'+(t.homeRec||'—')+'</div></div>';
+            h+='<div class="quad-cell"><div class="qlabel">Road</div><div class="qval">'+(t.roadRec||'—')+'</div></div>';
+            h+='</div></div>';
+
+            if(t.hcaPts!==undefined){{
+                h+='<div class="modal-section"><h3>Home Court Advantage</h3>';
+                h+='<div style="display:flex;gap:1rem;margin-bottom:0.5rem;">';
+                h+=statCard('HCA Score',(t.hca*100).toFixed(0)+'%');
+                h+=statCard('Point Adv',(t.hcaPts>=0?'+':'')+t.hcaPts.toFixed(1));
+                h+='</div>';
+                h+='<div class="hca-bars">';
+                h+=hcaBar('Fouls',t.hcaFoul||0,4);
+                h+=hcaBar('Scoring',t.hcaScoring||0,15);
+                h+=hcaBar('TOs',t.hcaTO||0,4);
+                h+=hcaBar('Blocks',t.hcaBlk||0,3);
+                h+='</div>';
+                if(t.homePtsM!==undefined){{
+                    h+='<div style="display:flex;gap:1rem;margin-top:0.5rem;">';
+                    h+=statCard('Home Pts Margin',(t.homePtsM>=0?'+':'')+t.homePtsM.toFixed(1));
+                    h+=statCard('Road Pts Margin',(t.roadPtsM>=0?'+':'')+t.roadPtsM.toFixed(1));
+                    h+='</div>';
+                }}
+                h+='</div>';
+            }}
+
+            h+='<div style="margin-top:1rem;">';
+            h+='<button class="modal-btn" id="compare-btn" data-team="'+t.name+'">Compare with...</button>';
+            h+='<div class="compare-search" id="compare-search" style="display:none;">';
+            h+='<input type="text" id="compare-input" placeholder="Search team...">';
+            h+='<div class="results" id="compare-results"></div>';
+            h+='</div></div>';
+
+            h+='<div class="modal-section" style="margin-top:1.5rem;"><h3>Schedule &amp; Results</h3>';
+            h+='<div id="team-schedule-container"><div class="team-sched-loading">Loading schedule...</div></div>';
+            h+='</div>';
+
+            return h;
+        }}
+
+        function compareVal(a,b,lower){{
+            /* Return 'better' class for the better value */
+            if(a===b||a===undefined||b===undefined)return ['',''];
+            var aBetter=lower?(a<b):(a>b);
+            return aBetter?['better','']:['','better'];
+        }}
+
+        function cmpRow(label,aVal,bVal,lower){{
+            var cls=compareVal(aVal,bVal,lower);
+            var av=aVal!==undefined&&aVal!==null?String(aVal):'—';
+            var bv=bVal!==undefined&&bVal!==null?String(bVal):'—';
+            return '<div class="compare-stat-row">'
+                +'<div class="stat-val left '+cls[0]+'">'+av+'</div>'
+                +'<div class="stat-label">'+label+'</div>'
+                +'<div class="stat-val right '+cls[1]+'">'+bv+'</div></div>';
+        }}
+
+        function renderCompare(a,b){{
+            var h='<button class="modal-close" id="modal-close-btn">&larr; Back</button>';
+            box.classList.add('compare-mode');
+
+            h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">';
+            h+='<div class="modal-header" style="margin-bottom:0;">'+espnLogo(a.espn,36)+'<div class="team-info"><h2 style="font-size:1rem;">'+a.name+'</h2><div class="meta">'+a.conf+' '+a.rec+'</div></div></div>';
+            h+='<div style="font-size:1.2rem;color:var(--text-muted);font-weight:600;">vs</div>';
+            h+='<div class="modal-header" style="margin-bottom:0;flex-direction:row-reverse;">'+espnLogo(b.espn,36)+'<div class="team-info" style="text-align:right;"><h2 style="font-size:1rem;">'+b.name+'</h2><div class="meta">'+b.conf+' '+b.rec+'</div></div></div>';
+            h+='</div>';
+
+            h+='<div class="modal-section"><h3>Rankings</h3>';
+            h+=cmpRow('NET',a.net,b.net,true);
+            h+=cmpRow('KenPom',a.pom,b.pom,true);
+            h+=cmpRow('SOR',a.sor,b.sor,true);
+            h+=cmpRow('KPI',a.kpi,b.kpi,true);
+            h+=cmpRow('BPI',a.bpi,b.bpi,true);
+            h+='</div>';
+
+            h+='<div class="modal-section"><h3>Efficiency</h3>';
+            h+=cmpRow('AdjOE',a.oe,b.oe,false);
+            h+=cmpRow('AdjDE',a.de,b.de,true);
+            h+=cmpRow('Barthag',a.bar,b.bar,false);
+            h+=cmpRow('WAB',a.wab,b.wab,false);
+            h+='</div>';
+
+            h+='<div class="modal-section"><h3>Records</h3>';
+            h+=cmpRow('Overall',a.rec,b.rec);
+            h+=cmpRow('Q1',a.q1||'—',b.q1||'—');
+            h+=cmpRow('Q2',a.q2||'—',b.q2||'—');
+            h+=cmpRow('Home',a.homeRec||'—',b.homeRec||'—');
+            h+=cmpRow('Road',a.roadRec||'—',b.roadRec||'—');
+            h+='</div>';
+
+            if(a.hcaPts!==undefined&&b.hcaPts!==undefined){{
+                h+='<div class="modal-section"><h3>Home Court Advantage</h3>';
+                h+=cmpRow('HCA Score',(a.hca*100).toFixed(0)+'%',(b.hca*100).toFixed(0)+'%',false);
+                h+=cmpRow('Point Adv',a.hcaPts.toFixed(1),b.hcaPts.toFixed(1),false);
+                h+=cmpRow('Fouls',a.hcaFoul!==undefined?a.hcaFoul.toFixed(2):'—',b.hcaFoul!==undefined?b.hcaFoul.toFixed(2):'—',false);
+                h+=cmpRow('Scoring',a.hcaScoring!==undefined?a.hcaScoring.toFixed(1):'—',b.hcaScoring!==undefined?b.hcaScoring.toFixed(1):'—',false);
+                h+='</div>';
+            }}
+
+            /* Matchup prediction at 3 venues */
+            h+='<div class="compare-matchup"><h4>Matchup Prediction</h4>';
+            var venues=[
+                {{label:a.name+' Home',home:a}},
+                {{label:'Neutral',home:null}},
+                {{label:b.name+' Home',home:b}}
+            ];
+            var avgT=70;
+            for(var v=0;v<venues.length;v++){{
+                var venue=venues[v];
+                var aOE=a.oe,aDE=a.de,bOE=b.oe,bDE=b.de;
+                var hcaPts=0;
+                if(venue.home===a)hcaPts=a.hcaPts!==undefined?a.hcaPts:(a.hca*6+1);
+                else if(venue.home===b)hcaPts=-(b.hcaPts!==undefined?b.hcaPts:(b.hca*6+1));
+                var aExpOE=(aOE+bDE)/2, bExpOE=(bOE+aDE)/2;
+                var margin=aExpOE-bExpOE+hcaPts;
+                var aScore=Math.round(avgT+margin/2);
+                var bScore=Math.round(avgT-margin/2);
+                var spread=margin>=0?a.name+' -'+Math.abs(margin).toFixed(1):b.name+' -'+Math.abs(margin).toFixed(1);
+                h+='<div class="venue-row">';
+                h+='<div class="venue">'+venue.label+'</div>';
+                h+='<div class="spread">'+spread+'</div>';
+                h+='<div class="winpct">'+aScore+'-'+bScore+'</div>';
+                h+='</div>';
+            }}
+            h+='</div>';
+
+            h+='<div style="margin-top:0.75rem;text-align:center;">';
+            h+='<button class="modal-btn" id="back-btn" data-team="'+a.name+'">Back to '+a.name+'</button>';
+            h+='</div>';
+
+            return h;
+        }}
+
+        function closeModal(){{
+            overlay.classList.remove('active');
+            box.classList.remove('compare-mode');
+            box.innerHTML='';
+            document.body.style.overflow='';
+        }}
+
+        overlay.addEventListener('click',function(e){{
+            if(e.target===overlay)closeModal();
+        }});
+
+        document.addEventListener('keydown',function(e){{
+            if(e.key==='Escape')closeModal();
+        }});
+
+        box.addEventListener('click',function(e){{
+            if(e.target.id==='modal-close-btn')closeModal();
+            if(e.target.id==='back-btn'){{
+                var name=e.target.dataset.team;
+                if(name)openProfile(name);
+            }}
+            /* Box score toggle */
+            var gameRow=e.target.closest('.team-sched-game');
+            if(gameRow){{
+                var row=gameRow.closest('.team-sched-row');
+                if(row&&row.dataset.eid)toggleBoxScore(row.dataset.eid);
+            }}
+        }});
+
+        function openProfile(name){{
+            var t=findTeam(name);
+            if(!t)return;
+            box.classList.remove('compare-mode');
+            box.innerHTML=renderProfile(t);
+            overlay.classList.add('active');
+            overlay.scrollTop=0;
+            document.body.style.overflow='hidden';
+            fetchTeamSchedule(t);
+
+            var cmpBtn=document.getElementById('compare-btn');
+            var cmpSearch=document.getElementById('compare-search');
+            var cmpInput=document.getElementById('compare-input');
+            var cmpResults=document.getElementById('compare-results');
+
+            if(cmpBtn)cmpBtn.addEventListener('click',function(){{
+                cmpSearch.style.display='block';
+                cmpInput.focus();
+            }});
+
+            if(cmpInput)cmpInput.addEventListener('input',function(){{
+                var q=this.value.toLowerCase();
+                if(q.length<2){{cmpResults.classList.remove('show');return;}}
+                var html='';
+                for(var i=0;i<teams.length;i++){{
+                    if(teams[i].name===name)continue;
+                    if(teams[i].name.toLowerCase().indexOf(q)!==-1){{
+                        html+='<div data-name="'+teams[i].name+'">'+espnLogo(teams[i].espn,20)+teams[i].name+'</div>';
+                    }}
+                }}
+                cmpResults.innerHTML=html||'<div style="color:var(--text-muted)">No matches</div>';
+                cmpResults.classList.add('show');
+            }});
+
+            if(cmpResults)cmpResults.addEventListener('click',function(e){{
+                var el=e.target.closest('[data-name]');
+                if(!el)return;
+                var b=findTeam(el.dataset.name);
+                if(!b)return;
+                box.innerHTML=renderCompare(t,b);
+            }});
+        }}
+
+        window.__openProfile=openProfile;
+
+        /* Click delegation on .stats-team cells across all tabs */
+        document.addEventListener('click',function(e){{
+            var cell=e.target.closest('.stats-team');
+            if(!cell)return;
+            var name=cell.dataset.team||cell.textContent.trim();
+            if(!name)return;
+            e.preventDefault();
+            openProfile(name);
         }});
     }})();
     </script>

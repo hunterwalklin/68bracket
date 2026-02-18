@@ -38,6 +38,7 @@ def build_features(
     nitty_gritty: pd.DataFrame,
     torvik: pd.DataFrame,
     conferences: pd.DataFrame,
+    espn_box: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Merge all data sources and build the full feature matrix.
 
@@ -47,6 +48,7 @@ def build_features(
         nitty_gritty: WarrenNolan data (NET ranking, KPI, SOR, BPI, POM rankings)
         torvik: Bart Torvik data (WAB, Barthag, AdjOE, AdjDE, quadrant records)
         conferences: Conference tournament winners
+        espn_box: ESPN box score data for KenPom-style HCA (optional, display-only)
 
     Returns:
         DataFrame with all features and target columns (made_tournament, seed)
@@ -105,6 +107,29 @@ def build_features(
     # Convert feature columns to numeric
     for feat in ALL_FEATURES:
         df[feat] = pd.to_numeric(df[feat], errors="coerce").fillna(0.0)
+
+    # Merge KenPom-style HCA features (display-only — NOT added to ALL_FEATURES)
+    if espn_box is not None and not espn_box.empty:
+        from features.hca import build_hca_features
+        # Pass NET rankings for quality weighting
+        net_df = df[["school_id", "season", "net_ranking"]].copy() if "net_ranking" in df.columns else None
+        hca_df = build_hca_features(espn_box, net_rankings=net_df)
+        if not hca_df.empty and "school_id" in df.columns:
+            hca_cols = [c for c in hca_df.columns if c not in ("school_id", "season")]
+            # Drop any pre-existing HCA columns to avoid _x/_y suffixes
+            existing_hca = [c for c in hca_cols if c in df.columns]
+            if existing_hca:
+                df = df.drop(columns=existing_hca)
+            df = df.merge(hca_df, on=["school_id", "season"], how="left")
+            # Fill missing HCA values with defaults
+            df["hca_score"] = df.get("hca_score", pd.Series(dtype=float)).fillna(0.0)
+            df["hca_points"] = df.get("hca_points", pd.Series(dtype=float)).fillna(3.5)
+            for col in ["foul_advantage", "scoring_advantage",
+                        "turnover_advantage", "block_advantage",
+                        "espn_home_wins", "espn_home_losses",
+                        "espn_road_wins", "espn_road_losses",
+                        "home_games", "road_games"]:
+                df[col] = df.get(col, pd.Series(dtype=float)).fillna(0.0)
 
     return df
 
