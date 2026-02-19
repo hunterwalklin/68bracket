@@ -262,24 +262,31 @@ def cmd_predict(args):
     field = sel_model.select_field(pred_df)
     print(f"  Selected {len(field)} teams")
 
-    # Compute bubble: last 4 byes, last 4 in, first 4 out, next 4 out
-    at_large = field[field["selection_method"] == "at_large"].sort_values("selection_prob")
-    last_4_in = at_large.head(4)[["team", "selection_prob"]].values.tolist()
-    last_4_byes = at_large.iloc[4:8][["team", "selection_prob"]].values.tolist()
+    # Stage 2: Assign seeds
+    print("\nStage 2: Assigning seeds...")
+    seeded = seed_model.assign_seeds(field)
+
+    # Compute bubble from seeded bracket (after seed assignment so it matches)
+    # Last 4 In = the 4 at-large First Four teams (weakest at-large by raw_seed)
+    at_large_seeded = seeded[seeded["selection_method"] == "at_large"]
+    last_4_in = at_large_seeded[at_large_seeded["first_four"]].sort_values("raw_seed")
+    # Last 4 Byes = the 4 at-large teams just above the First Four cutline
+    non_ff_at_large = at_large_seeded[~at_large_seeded["first_four"]].sort_values("raw_seed", ascending=False)
+    last_4_byes = non_ff_at_large.head(4)
 
     selected_ids = set(field["school_id"])
     all_with_probs = pred_df.copy()
     all_with_probs["selection_prob"] = sel_model.predict_proba(pred_df)
     not_selected = all_with_probs[~all_with_probs["school_id"].isin(selected_ids)]
     not_selected = not_selected.sort_values("selection_prob", ascending=False)
-    first_4_out = not_selected.head(4)[["team", "selection_prob"]].values.tolist()
-    next_4_out = not_selected.iloc[4:8][["team", "selection_prob"]].values.tolist()
+    first_4_out = not_selected.head(4)
+    next_4_out = not_selected.iloc[4:8]
 
     bubble = {
-        "last_4_byes": [t for t, _ in last_4_byes],
-        "last_4_in": [t for t, _ in last_4_in],
-        "first_4_out": [t for t, _ in first_4_out],
-        "next_4_out": [t for t, _ in next_4_out],
+        "last_4_byes": last_4_byes["team"].tolist(),
+        "last_4_in": last_4_in["team"].tolist(),
+        "first_4_out": first_4_out["team"].tolist(),
+        "next_4_out": next_4_out["team"].tolist(),
     }
 
     print(f"\n  Bubble:")
@@ -287,10 +294,6 @@ def cmd_predict(args):
     print(f"    Last 4 In:    {', '.join(bubble['last_4_in'])}")
     print(f"    First 4 Out:  {', '.join(bubble['first_4_out'])}")
     print(f"    Next 4 Out:   {', '.join(bubble['next_4_out'])}")
-
-    # Stage 2: Assign seeds
-    print("\nStage 2: Assigning seeds...")
-    seeded = seed_model.assign_seeds(field)
 
     # Assign regions
     print("Assigning regions...")
