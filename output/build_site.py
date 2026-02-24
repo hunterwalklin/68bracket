@@ -821,11 +821,11 @@ def _build_scores_tab(stats_df: pd.DataFrame) -> str:
 
         # HCA breakdown (KenPom)
         if has_kenpom:
-            team_data["hcaPts"] = round(float(r.get("hca_points", 3.5) or 3.5), 1)
+            team_data["hcaPts"] = round(float(r.get("hca_points", 3.2) or 3.2), 1)
             team_data["hcaFoul"] = round(float(r.get("foul_advantage", 0) or 0), 2)
             team_data["hcaScoring"] = round(float(r.get("scoring_advantage", 0) or 0), 1)
             team_data["hcaTO"] = round(float(r.get("turnover_advantage", 0) or 0), 2)
-            team_data["hcaBlk"] = round(float(r.get("block_advantage", 0) or 0), 2)
+            team_data["hcaTravel"] = round(float(r.get("travel_advantage_pts", 0) or 0), 2)
             team_data["homePtsM"] = round(float(r.get("home_pts_margin", 0) or 0), 1)
             team_data["roadPtsM"] = round(float(r.get("road_pts_margin", 0) or 0), 1)
             team_data["homeFoulM"] = round(float(r.get("home_foul_margin", 0) or 0), 1)
@@ -949,18 +949,18 @@ def _build_homecourt_tab_kenpom(stats_df: pd.DataFrame) -> str:
     rows = ""
     for i, r in df.iterrows():
         score = float(r.get("hca_score", 0))
-        hca_pts = float(r.get("hca_points", 3.5))
+        hca_pts = float(r.get("hca_points", 3.2))
         foul = float(r.get("foul_advantage", 0))
         scoring = float(r.get("scoring_advantage", 0))
         to_adv = float(r.get("turnover_advantage", 0))
-        blk = float(r.get("block_advantage", 0))
+        travel = float(r.get("travel_advantage_pts", 0))
 
         # Color the HCA score percentile
         hue = int(score * 120)
         score_style = f"color: hsl({hue}, 70%, 50%);"
 
         # Color HCA points
-        pts_diff = hca_pts - 3.5
+        pts_diff = hca_pts - 3.2
         if pts_diff > 0.5:
             pts_style = "color: var(--green);"
         elif pts_diff < -0.5:
@@ -1001,7 +1001,7 @@ def _build_homecourt_tab_kenpom(stats_df: pd.DataFrame) -> str:
             f"<td style='{_color_val(foul)}'>{foul:+.2f}</td>"
             f"<td style='{_color_val(scoring)}'>{scoring:+.1f}</td>"
             f"<td style='{_color_val(to_adv)}'>{to_adv:+.2f}</td>"
-            f"<td style='{_color_val(blk)}'>{blk:+.2f}</td>"
+            f"<td style='{_color_val(travel)}'>{travel:+.2f}</td>"
             f"<td>{int(r['net_ranking'])}</td>"
             f"</tr>\n"
         )
@@ -1012,7 +1012,7 @@ def _build_homecourt_tab_kenpom(stats_df: pd.DataFrame) -> str:
     <th data-sort="str">Home</th><th data-sort="str">Road</th>
     <th data-sort="num">HCA Score</th><th data-sort="num">HCA Pts</th>
     <th data-sort="num">Fouls</th><th data-sort="num">Scoring</th>
-    <th data-sort="num">TOs</th><th data-sort="num">Blocks</th><th data-sort="num">NET</th>
+    <th data-sort="num">TOs</th><th data-sort="num">Travel</th><th data-sort="num">NET</th>
 </tr></thead>
 <tbody>
 {rows}</tbody>
@@ -1214,7 +1214,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     timestamp_match = re.search(r"^\*Last updated: (.+)\*$", md, re.MULTILINE)
     timestamp = timestamp_match.group(1) if timestamp_match else ""
 
-    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
+    model_label = {
+        "rf": "Random Forest", "xgb": "XGBoost",
+        "lgbm": "LightGBM", "catboost": "CatBoost",
+        "linear": "Linear (LogReg/Ridge)", "mlp": "MLP Neural Net",
+        "ensemble": "Ensemble (RF + XGB)", "full_ensemble": "Full Ensemble (All 6)",
+    }.get(model_type, model_type)
 
     # Parse seed list table
     seed_rows = re.findall(r"^\| (\d+) \| (.+?) \|$", md, re.MULTILINE)
@@ -4736,7 +4741,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 h+=hcaBar('Fouls',t.hcaFoul||0,4);
                 h+=hcaBar('Scoring',t.hcaScoring||0,15);
                 h+=hcaBar('TOs',t.hcaTO||0,4);
-                h+=hcaBar('Blocks',t.hcaBlk||0,3);
+                h+=hcaBar('Travel',t.hcaTravel||0,1);
                 h+='</div>';
                 if(t.homePtsM!==undefined){{
                     h+='<div style="display:flex;gap:1rem;margin-top:0.5rem;">';

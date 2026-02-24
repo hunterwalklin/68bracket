@@ -111,9 +111,7 @@ def build_features(
     # Merge KenPom-style HCA features (display-only — NOT added to ALL_FEATURES)
     if espn_box is not None and not espn_box.empty:
         from features.hca import build_hca_features
-        # Pass NET rankings for quality weighting
-        net_df = df[["school_id", "season", "net_ranking"]].copy() if "net_ranking" in df.columns else None
-        hca_df = build_hca_features(espn_box, net_rankings=net_df)
+        hca_df = build_hca_features(espn_box)
         if not hca_df.empty and "school_id" in df.columns:
             hca_cols = [c for c in hca_df.columns if c not in ("school_id", "season")]
             # Drop any pre-existing HCA columns to avoid _x/_y suffixes
@@ -122,10 +120,12 @@ def build_features(
                 df = df.drop(columns=existing_hca)
             df = df.merge(hca_df, on=["school_id", "season"], how="left")
             # Fill missing HCA values with defaults
-            df["hca_score"] = df.get("hca_score", pd.Series(dtype=float)).fillna(0.0)
-            df["hca_points"] = df.get("hca_points", pd.Series(dtype=float)).fillna(3.5)
+            df["hca_score"] = df.get("hca_score", pd.Series(dtype=float)).fillna(0.5)
+            df["hca_points"] = df.get("hca_points", pd.Series(dtype=float)).fillna(3.2)
             for col in ["foul_advantage", "scoring_advantage",
-                        "turnover_advantage", "block_advantage",
+                        "turnover_advantage", "other_advantage",
+                        "block_advantage", "travel_advantage_pts",
+                        "avg_opp_travel_mi",
                         "espn_home_wins", "espn_home_losses",
                         "espn_road_wins", "espn_road_losses",
                         "home_games", "road_games"]:

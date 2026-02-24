@@ -3,7 +3,7 @@
 import pandas as pd
 
 from config import REGIONS, SEEDS, PREDICTION_SEASON
-from output.bracket_builder import build_matchups, build_first_four
+from output.bracket_builder import build_matchups, build_first_four, sort_by_true_seed
 
 
 def _render_half_bracket(teams, region_name, name_w):
@@ -121,9 +121,7 @@ def display_seed_list(df: pd.DataFrame, season: int = PREDICTION_SEASON):
     print(f"{'='*60}")
 
     for seed in SEEDS:
-        seed_teams = df[df["predicted_seed"] == seed].sort_values(
-            "raw_seed" if "raw_seed" in df.columns else "selection_prob"
-        )
+        seed_teams = sort_by_true_seed(df[df["predicted_seed"] == seed])
         has_ff = "first_four" in seed_teams.columns and seed_teams["first_four"].any()
         if has_ff:
             direct = seed_teams[~seed_teams["first_four"]]
@@ -184,35 +182,56 @@ def display_selection_summary(df: pd.DataFrame):
 
 
 def display_homecourt(stats_df: pd.DataFrame, top_n: int = 25):
-    """Print top home court advantage rankings."""
-    df = stats_df[stats_df["net_ranking"] > 0].copy()
+    """Print top home court advantage rankings using model HCA columns."""
+    has_model = "hca_score" in stats_df.columns and stats_df["hca_score"].sum() > 0
 
-    df["home_wins"] = df["wins"] - df["road_wins"]
-    df["home_losses"] = df["losses"] - df["road_losses"]
-    df["home_games"] = df["home_wins"] + df["home_losses"]
-    df["road_games"] = df["road_wins"] + df["road_losses"]
+    if has_model:
+        df = stats_df[stats_df["hca_score"] > 0].copy()
+        df = df.sort_values("hca_score", ascending=False).head(top_n).reset_index(drop=True)
 
-    df = df[(df["home_games"] >= 3) & (df["road_games"] >= 3)].copy()
+        print(f"\n  Home Court Rankings (Top {top_n}):")
+        print(f"  {'#':>3}  {'Team':<25} {'Conf':<12} {'HCA':>5} {'Pts':>5} "
+              f"{'Fouls':>6} {'Score':>6} {'TOs':>5} {'Travel':>6} {'NET':>4}")
+        print(f"  {'---':>3}  {'----':<25} {'----':<12} {'---':>5} {'---':>5} "
+              f"{'-----':>6} {'-----':>6} {'---':>5} {'------':>6} {'---':>4}")
+        for i, r in df.iterrows():
+            score = float(r.get("hca_score", 0))
+            hca_pts = float(r.get("hca_points", 3.2))
+            foul = float(r.get("foul_advantage", 0))
+            scoring = float(r.get("scoring_advantage", 0))
+            to_adv = float(r.get("turnover_advantage", 0))
+            travel = float(r.get("travel_advantage_pts", 0))
+            net = int(r.get("net_ranking", 0))
+            print(
+                f"  {i+1:3d}  {r['team']:<25} {r.get('conference', ''):<12} "
+                f"{score:>5.2f} {hca_pts:>+4.1f} "
+                f"{foul:>+5.2f} {scoring:>+5.1f} {to_adv:>+5.2f} "
+                f"{travel:>+5.2f} {net:>4d}"
+            )
+    else:
+        # Fallback: legacy win%-based display when no model data
+        df = stats_df[stats_df["net_ranking"] > 0].copy()
+        df["home_wins"] = df["wins"] - df["road_wins"]
+        df["home_losses"] = df["losses"] - df["road_losses"]
+        df["home_games"] = df["home_wins"] + df["home_losses"]
+        df["road_games"] = df["road_wins"] + df["road_losses"]
+        df = df[(df["home_games"] >= 3) & (df["road_games"] >= 3)].copy()
+        df["home_wp"] = df["home_wins"] / df["home_games"]
+        df["road_wp"] = df["road_wins"] / df["road_games"]
+        df["dominance"] = df["home_wp"] - df["road_wp"]
+        df = df.sort_values("dominance", ascending=False).head(top_n).reset_index(drop=True)
 
-    df["home_wp"] = df["home_wins"] / df["home_games"]
-    df["road_wp"] = df["road_wins"] / df["road_games"]
-    df["dominance"] = df["home_wp"] - df["road_wp"]
-    df["quality"] = (1 - df["net_ranking"] / 200).clip(lower=0)
-    df["hca_score"] = df["dominance"] * 0.65 + df["quality"] * 0.35
-
-    df = df.sort_values("hca_score", ascending=False).head(top_n).reset_index(drop=True)
-
-    print(f"\n  Home Court Rankings (Top {top_n}):")
-    print(f"  {'#':>3}  {'Team':<25} {'Conf':<12} {'Home':>6} {'Road':>6} {'Dom':>6} {'HCA':>6} {'NET':>4}")
-    print(f"  {'---':>3}  {'----':<25} {'----':<12} {'----':>6} {'----':>6} {'---':>6} {'---':>6} {'---':>4}")
-    for i, r in df.iterrows():
-        hw, hl = int(r["home_wins"]), int(r["home_losses"])
-        rw, rl = int(r["road_wins"]), int(r["road_losses"])
-        print(
-            f"  {i+1:3d}  {r['team']:<25} {r['conference']:<12} "
-            f"{hw:>2}-{hl:<2}  {rw:>2}-{rl:<2}  "
-            f"{r['dominance']:>5.3f}  {r['hca_score']:>5.3f}  {int(r['net_ranking']):>3d}"
-        )
+        print(f"\n  Home Court Rankings (Top {top_n}):")
+        print(f"  {'#':>3}  {'Team':<25} {'Conf':<12} {'Home':>6} {'Road':>6} {'Dom':>6} {'NET':>4}")
+        print(f"  {'---':>3}  {'----':<25} {'----':<12} {'----':>6} {'----':>6} {'---':>6} {'---':>4}")
+        for i, r in df.iterrows():
+            hw, hl = int(r["home_wins"]), int(r["home_losses"])
+            rw, rl = int(r["road_wins"]), int(r["road_losses"])
+            print(
+                f"  {i+1:3d}  {r['team']:<25} {r['conference']:<12} "
+                f"{hw:>2}-{hl:<2}  {rw:>2}-{rl:<2}  "
+                f"{r['dominance']:>5.3f}  {int(r['net_ranking']):>3d}"
+            )
 
 
 def generate_markdown(
@@ -236,8 +255,7 @@ def generate_markdown(
     ]
 
     for seed in SEEDS:
-        sort_col = "raw_seed" if "raw_seed" in df.columns else "selection_prob"
-        seed_teams = df[df["predicted_seed"] == seed].sort_values(sort_col)
+        seed_teams = sort_by_true_seed(df[df["predicted_seed"] == seed])
         # List direct teams first, then First Four teams
         direct = seed_teams[~seed_teams.get("first_four", False)]
         ff = seed_teams[seed_teams.get("first_four", False)]
