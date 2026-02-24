@@ -3358,24 +3358,23 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             if(!sel[0]||!sel[1]){{res.classList.remove('visible');return;}}
             var a=sel[0],b=sel[1];
 
-            /* AdjEM spread — use pace if available */
-            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
+            /* KenPom-style prediction: additive efficiency model */
+            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var emA=a.oe-a.de, emB=b.oe-b.de;
-            var spread=(emA-emB)*posFactor;
+            var spread=(emA-emB)*expectedPoss/100;
 
             /* Apply team-specific home court advantage */
             if(venue==='homeA'){{
-                var hcaA=a.hcaPts!==undefined?a.hcaPts:(a.hca*6+1);
-                if(hcaA<0.5)hcaA=0.5;
+                var hcaA=a.hcaPts!==undefined?a.hcaPts:3.2;
                 spread+=hcaA;
             }}else if(venue==='homeB'){{
-                var hcaB=b.hcaPts!==undefined?b.hcaPts:(b.hca*6+1);
-                if(hcaB<0.5)hcaB=0.5;
+                var hcaB=b.hcaPts!==undefined?b.hcaPts:3.2;
                 spread-=hcaB;
             }}
 
             /* Convert spread to win probability using logistic function */
-            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
+            var winA=1/(1+Math.pow(10,-spread/11));
             var winB=1-winA;
 
             var pctA=(winA*100).toFixed(1);
@@ -3441,23 +3440,27 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function predict(a,b,homeId){{
             if(!a||!b)return null;
-            /* Use average pace if both teams have it, else fall back to 0.68 constant */
-            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
-            var ptsA=(a.oe+b.de)/2*posFactor;
-            var ptsB=(b.oe+a.de)/2*posFactor;
-            /* Home court advantage: use KenPom hcaPts if available, else legacy formula */
+            /* KenPom-style additive efficiency model */
+            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
+            var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
+            var spread=rawA-rawB;
+            /* Home court advantage */
             if(homeId){{
                 var homeTeam=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
                 if(homeTeam){{
-                    var pts=homeTeam.hcaPts!==undefined?homeTeam.hcaPts:(homeTeam.hca*6+1);
-                    if(pts<0.5)pts=0.5;
-                    var half=pts/2;
-                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
-                    else{{ptsB+=half;ptsA-=half;}}
+                    var pts=homeTeam.hcaPts!==undefined?homeTeam.hcaPts:3.2;
+                    if(String(homeId)===String(a.espn))spread+=pts;
+                    else spread-=pts;
                 }}
             }}
-            var spread=ptsA-ptsB;
-            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
+            /* Compress total toward pace-adjusted baseline (preserves spread) */
+            var baseTotal=2*AVG_EFF*expectedPoss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var ptsA=total/2+spread/2;
+            var ptsB=total/2-spread/2;
+            var winA=1/(1+Math.pow(10,-spread/11));
             /* Watchability: competitiveness (60%) + team quality (40%) */
             var comp=Math.max(0,1-Math.abs(spread)/20);
             var avgNet=(a.net+b.net)/2;
@@ -3788,21 +3791,18 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function predict(a,b,homeId){{
             if(!a||!b)return 0.5;
-            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
-            var ptsA=(a.oe+b.de)/2*posFactor;
-            var ptsB=(b.oe+a.de)/2*posFactor;
+            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var spread=((a.oe-a.de)-(b.oe-b.de))*expectedPoss/100;
             if(homeId){{
                 var ht=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
                 if(ht){{
-                    var pts=ht.hcaPts!==undefined?ht.hcaPts:(ht.hca*6+1);
-                    if(pts<0.5)pts=0.5;
-                    var half=pts/2;
-                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
-                    else{{ptsB+=half;ptsA-=half;}}
+                    var pts=ht.hcaPts!==undefined?ht.hcaPts:3.2;
+                    if(String(homeId)===String(a.espn))spread+=pts;
+                    else spread-=pts;
                 }}
             }}
-            var spread=ptsA-ptsB;
-            return 1/(1+Math.pow(10,-spread/(11*posFactor)));
+            return 1/(1+Math.pow(10,-spread/11));
         }}
 
         function fetchSchedule(espnId){{
@@ -3988,21 +3988,24 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function predict(a,b,homeId){{
             if(!a||!b)return null;
-            var posFactor=(a.pace&&b.pace)?(a.pace+b.pace)/2/100:0.68;
-            var ptsA=(a.oe+b.de)/2*posFactor;
-            var ptsB=(b.oe+a.de)/2*posFactor;
+            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
+            var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
+            var spread=rawA-rawB;
             if(homeId){{
                 var ht=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
                 if(ht){{
-                    var pts=ht.hcaPts!==undefined?ht.hcaPts:(ht.hca*6+1);
-                    if(pts<0.5)pts=0.5;
-                    var half=pts/2;
-                    if(String(homeId)===String(a.espn)){{ptsA+=half;ptsB-=half;}}
-                    else{{ptsB+=half;ptsA-=half;}}
+                    var pts=ht.hcaPts!==undefined?ht.hcaPts:3.2;
+                    if(String(homeId)===String(a.espn))spread+=pts;
+                    else spread-=pts;
                 }}
             }}
-            var spread=ptsA-ptsB;
-            var winA=1/(1+Math.pow(10,-spread/(11*posFactor)));
+            var baseTotal=2*AVG_EFF*expectedPoss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var ptsA=total/2+spread/2;
+            var ptsB=total/2-spread/2;
+            var winA=1/(1+Math.pow(10,-spread/11));
             var comp=Math.max(0,1-Math.abs(spread)/20);
             var avgNet=(a.net+b.net)/2;
             var qual=Math.max(0,1-avgNet/200);
@@ -4832,17 +4835,21 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 {{label:'Neutral',home:null}},
                 {{label:b.name+' Home',home:b}}
             ];
-            var avgT=70;
+            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
+            var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
+            var baseTotal=2*AVG_EFF*expectedPoss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var neutralSpread=rawA-rawB;
             for(var v=0;v<venues.length;v++){{
                 var venue=venues[v];
-                var aOE=a.oe,aDE=a.de,bOE=b.oe,bDE=b.de;
-                var hcaPts=0;
-                if(venue.home===a)hcaPts=a.hcaPts!==undefined?a.hcaPts:(a.hca*6+1);
-                else if(venue.home===b)hcaPts=-(b.hcaPts!==undefined?b.hcaPts:(b.hca*6+1));
-                var aExpOE=(aOE+bDE)/2, bExpOE=(bOE+aDE)/2;
-                var margin=aExpOE-bExpOE+hcaPts;
-                var aScore=Math.round(avgT+margin/2);
-                var bScore=Math.round(avgT-margin/2);
+                var margin=neutralSpread;
+                if(venue.home===a){{var hca=a.hcaPts!==undefined?a.hcaPts:3.2;margin+=hca;}}
+                else if(venue.home===b){{var hca=b.hcaPts!==undefined?b.hcaPts:3.2;margin-=hca;}}
+                var aScore=Math.round(total/2+margin/2);
+                var bScore=Math.round(total/2-margin/2);
+                if(aScore===bScore){{if(margin>=0)aScore+=1;else bScore+=1;}}
                 var spread=margin>=0?a.name+' -'+Math.abs(margin).toFixed(1):b.name+' -'+Math.abs(margin).toFixed(1);
                 h+='<div class="venue-row">';
                 h+='<div class="venue">'+venue.label+'</div>';
