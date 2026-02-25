@@ -1,15 +1,21 @@
-"""Stage 1: Classifier for tournament selection (RF or XGBoost)."""
+"""Stage 1: Classifier for tournament selection."""
 
 import os
 
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 import joblib
 
 from config import (
     SELECTION_RF_PARAMS, SELECTION_XGB_PARAMS,
+    SELECTION_LGBM_PARAMS, SELECTION_CATBOOST_PARAMS,
+    SELECTION_LINEAR_PARAMS, SELECTION_MLP_PARAMS,
     ALL_FEATURES, MODEL_DIR, TOTAL_TEAMS,
 )
 
@@ -163,10 +169,148 @@ class EnsembleSelectionModel(SelectionModel):
         self.is_fitted = True
 
 
+class LGBMSelectionModel(SelectionModel):
+    """LightGBM variant of the selection classifier."""
+
+    def __init__(self):
+        from lightgbm import LGBMClassifier
+        self.model = LGBMClassifier(**SELECTION_LGBM_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "selection_model_lgbm.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "selection_model_lgbm.joblib"):
+        super().load(filename)
+
+
+class CatBoostSelectionModel(SelectionModel):
+    """CatBoost variant of the selection classifier."""
+
+    def __init__(self):
+        from catboost import CatBoostClassifier
+        self.model = CatBoostClassifier(**SELECTION_CATBOOST_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "selection_model_catboost.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "selection_model_catboost.joblib"):
+        super().load(filename)
+
+
+class LinearSelectionModel(SelectionModel):
+    """Logistic Regression (with StandardScaler) selection classifier."""
+
+    def __init__(self):
+        self.model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", LogisticRegression(**SELECTION_LINEAR_PARAMS)),
+        ])
+        self.is_fitted = False
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        coefs = np.abs(self.model.named_steps["clf"].coef_[0])
+        importance = pd.DataFrame({
+            "feature": ALL_FEATURES,
+            "importance": coefs,
+        }).sort_values("importance", ascending=False)
+        return importance
+
+    def save(self, filename: str = "selection_model_linear.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "selection_model_linear.joblib"):
+        super().load(filename)
+
+
+class MLPSelectionModel(SelectionModel):
+    """MLP (with StandardScaler) selection classifier."""
+
+    def __init__(self):
+        self.model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", MLPClassifier(**SELECTION_MLP_PARAMS)),
+        ])
+        self.is_fitted = False
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        # Use mean absolute first-layer weights as proxy importance
+        weights = np.abs(self.model.named_steps["clf"].coefs_[0])
+        importance_vals = weights.mean(axis=1)
+        importance = pd.DataFrame({
+            "feature": ALL_FEATURES,
+            "importance": importance_vals,
+        }).sort_values("importance", ascending=False)
+        return importance
+
+    def save(self, filename: str = "selection_model_mlp.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "selection_model_mlp.joblib"):
+        super().load(filename)
+
+
+class FullEnsembleSelectionModel(SelectionModel):
+    """Averages all 6 selection model probabilities."""
+
+    def __init__(self):
+        self.models = [
+            SelectionModel(),
+            XGBSelectionModel(),
+            LGBMSelectionModel(),
+            CatBoostSelectionModel(),
+            LinearSelectionModel(),
+            MLPSelectionModel(),
+        ]
+        self.is_fitted = False
+
+    def train(self, X: pd.DataFrame, y: pd.Series):
+        for m in self.models:
+            m.train(X, y)
+        self.is_fitted = True
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        probas = np.column_stack([m.predict_proba(X) for m in self.models])
+        return probas.mean(axis=1)
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        imps = [m.feature_importance().set_index("feature")["importance"]
+                for m in self.models]
+        avg = sum(imps) / len(imps)
+        return avg.reset_index().rename(columns={0: "importance"}).sort_values(
+            "importance", ascending=False)
+
+    def save(self, filename: str | None = None):
+        for m in self.models:
+            m.save()
+
+    def load(self, filename: str | None = None):
+        for m in self.models:
+            m.load()
+        self.is_fitted = True
+
+
 def get_selection_model(model_type: str = "rf") -> SelectionModel:
     """Factory: return the right selection model class."""
     if model_type == "xgb":
         return XGBSelectionModel()
+    if model_type == "lgbm":
+        return LGBMSelectionModel()
+    if model_type == "catboost":
+        return CatBoostSelectionModel()
+    if model_type == "linear":
+        return LinearSelectionModel()
+    if model_type == "mlp":
+        return MLPSelectionModel()
     if model_type == "ensemble":
         return EnsembleSelectionModel()
+    if model_type == "full_ensemble":
+        return FullEnsembleSelectionModel()
     return SelectionModel()

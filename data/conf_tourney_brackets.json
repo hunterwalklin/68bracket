@@ -1,0 +1,1118 @@
+{
+  "ACC": {
+    "teams": 15,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 10 }, "bot": { "seed": 15 } },
+          { "id": "R1G2", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "R1G3", "top": { "seed": 12 }, "bot": { "seed": 13 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R2G2", "top": { "seed": 7 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G3", "top": { "seed": 6 }, "bot": { "ref": "R1G2" } },
+          { "id": "R2G4", "top": { "seed": 5 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R2G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R2G4" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R2G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R2G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "American": {
+    "teams": 10,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 5 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G2", "top": { "seed": 6 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 4 }, "bot": { "ref": "R2G1" } },
+          { "id": "QFG2", "top": { "seed": 3 }, "bot": { "ref": "R2G2" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG1" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG2" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "A-Sun": {
+    "teams": 12,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 12 } },
+          { "id": "R1G2", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } },
+          { "id": "R1G4", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "A-10": {
+    "teams": 14,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "R1G2", "top": { "seed": 12 }, "bot": { "seed": 13 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R2G2", "top": { "seed": 7 }, "bot": { "seed": 10 } },
+          { "id": "R2G3", "top": { "seed": 6 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G4", "top": { "seed": 5 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R2G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R2G4" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R2G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R2G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big 12": {
+    "teams": 16,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 9 }, "bot": { "seed": 16 } },
+          { "id": "R1G2", "top": { "seed": 12 }, "bot": { "seed": 13 } },
+          { "id": "R1G3", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "R1G4", "top": { "seed": 10 }, "bot": { "seed": 15 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G2", "top": { "seed": 5 }, "bot": { "ref": "R1G2" } },
+          { "id": "R2G3", "top": { "seed": 6 }, "bot": { "ref": "R1G3" } },
+          { "id": "R2G4", "top": { "seed": 7 }, "bot": { "ref": "R1G4" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R2G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R2G2" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R2G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R2G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big East": {
+    "teams": 11,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big Sky": {
+    "teams": 10,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big South": {
+    "teams": 9,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big Ten": {
+    "teams": 18,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 16 }, "bot": { "seed": 17 } },
+          { "id": "R1G2", "top": { "seed": 15 }, "bot": { "seed": 18 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 9 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G2", "top": { "seed": 12 }, "bot": { "seed": 13 } },
+          { "id": "R2G3", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "R2G4", "top": { "seed": 10 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Third Round",
+        "slots": [
+          { "id": "R3G1", "top": { "seed": 8 }, "bot": { "ref": "R2G1" } },
+          { "id": "R3G2", "top": { "seed": 5 }, "bot": { "ref": "R2G2" } },
+          { "id": "R3G3", "top": { "seed": 6 }, "bot": { "ref": "R2G3" } },
+          { "id": "R3G4", "top": { "seed": 7 }, "bot": { "ref": "R2G4" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R3G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R3G2" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R3G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R3G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Big West": {
+    "teams": 8,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 8 } },
+          { "id": "R1G2", "top": { "seed": 6 }, "bot": { "seed": 7 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 3 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG1" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG2" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "CAA": {
+    "teams": 13,
+    "rounds": [
+      {
+        "name": "Opening Round",
+        "slots": [
+          { "id": "OG1", "top": { "seed": 12 }, "bot": { "seed": 13 } }
+        ]
+      },
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 5 }, "bot": { "ref": "OG1" } },
+          { "id": "R1G3", "top": { "seed": 7 }, "bot": { "seed": 10 } },
+          { "id": "R1G4", "top": { "seed": 6 }, "bot": { "seed": 11 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G3" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G4" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "CUSA": {
+    "teams": 12,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 12 } },
+          { "id": "R1G2", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } },
+          { "id": "R1G4", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Horizon": {
+    "teams": 11,
+    "reseed": true,
+    "rounds": [
+      {
+        "name": "Opening Round",
+        "slots": [
+          { "id": "OG1", "top": { "seed": 10 }, "bot": { "seed": 11 } }
+        ]
+      },
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 6 }, "bot": { "seed": 7 } },
+          { "id": "R1G2", "top": { "seed": 5 }, "bot": { "seed": 8 } },
+          { "id": "R1G3", "top": { "seed": 4 }, "bot": { "seed": 9 } },
+          { "id": "R1G4", "top": { "seed": 3 }, "bot": { "ref": "OG1" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "R1G3" } },
+          { "id": "SFG2", "top": { "ref": "QFG2" }, "bot": { "ref": "R1G4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Ivy": {
+    "teams": 4,
+    "rounds": [
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "seed": 4 } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "seed": 3 } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "MAAC": {
+    "teams": 10,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "MAC": {
+    "teams": 8,
+    "rounds": [
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "seed": 8 } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "MEAC": {
+    "teams": 8,
+    "rounds": [
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "seed": 8 } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "MVC": {
+    "teams": 11,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "MWC": {
+    "teams": 12,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 12 } },
+          { "id": "R1G2", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } },
+          { "id": "R1G4", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "NEC": {
+    "teams": 8,
+    "reseed": true,
+    "rounds": [
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "seed": 8 } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "OVC": {
+    "teams": 8,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 8 } },
+          { "id": "R1G2", "top": { "seed": 6 }, "bot": { "seed": 7 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 3 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG1" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG2" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Patriot": {
+    "teams": 10,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "SEC": {
+    "teams": 16,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 9 }, "bot": { "seed": 16 } },
+          { "id": "R1G2", "top": { "seed": 12 }, "bot": { "seed": 13 } },
+          { "id": "R1G3", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "R1G4", "top": { "seed": 10 }, "bot": { "seed": 15 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G2", "top": { "seed": 5 }, "bot": { "ref": "R1G2" } },
+          { "id": "R2G3", "top": { "seed": 6 }, "bot": { "ref": "R1G3" } },
+          { "id": "R2G4", "top": { "seed": 7 }, "bot": { "ref": "R1G4" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R2G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R2G2" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R2G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R2G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Southern": {
+    "teams": 10,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G2", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Southland": {
+    "teams": 8,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 8 } },
+          { "id": "R1G2", "top": { "seed": 6 }, "bot": { "seed": 7 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG2", "top": { "seed": 3 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG1" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG2" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Summit": {
+    "teams": 9,
+    "rounds": [
+      {
+        "name": "Opening Round",
+        "slots": [
+          { "id": "OG1", "top": { "seed": 8 }, "bot": { "seed": 9 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "OG1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "Sun Belt": {
+    "teams": 14,
+    "rounds": [
+      {
+        "name": "Opening Round",
+        "slots": [
+          { "id": "OG1", "top": { "seed": 11 }, "bot": { "seed": 14 } },
+          { "id": "OG2", "top": { "seed": 12 }, "bot": { "seed": 13 } }
+        ]
+      },
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 10 }, "bot": { "ref": "OG1" } },
+          { "id": "R1G2", "top": { "seed": 9 }, "bot": { "ref": "OG2" } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "ref": "R1G2" } },
+          { "id": "R2G2", "top": { "seed": 7 }, "bot": { "ref": "R1G1" } }
+        ]
+      },
+      {
+        "name": "Third Round",
+        "slots": [
+          { "id": "R3G1", "top": { "seed": 6 }, "bot": { "ref": "R2G2" } },
+          { "id": "R3G2", "top": { "seed": 5 }, "bot": { "ref": "R2G1" } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 4 }, "bot": { "ref": "R3G2" } },
+          { "id": "QFG2", "top": { "seed": 3 }, "bot": { "ref": "R3G1" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG1" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG2" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "SWAC": {
+    "teams": 12,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 10 }, "bot": { "seed": 11 } },
+          { "id": "R1G2", "top": { "seed": 9 }, "bot": { "seed": 12 } }
+        ]
+      },
+      {
+        "name": "Second Round",
+        "slots": [
+          { "id": "R2G1", "top": { "seed": 8 }, "bot": { "ref": "R1G1" } },
+          { "id": "R2G2", "top": { "seed": 7 }, "bot": { "ref": "R1G2" } }
+        ]
+      },
+      {
+        "name": "Third Round",
+        "slots": [
+          { "id": "R3G1", "top": { "seed": 1 }, "bot": { "ref": "R2G1" } },
+          { "id": "R3G2", "top": { "seed": 2 }, "bot": { "ref": "R2G2" } },
+          { "id": "R3G3", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "R3G4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "R3G1" }, "bot": { "ref": "R3G3" } },
+          { "id": "SFG2", "top": { "ref": "R3G2" }, "bot": { "ref": "R3G4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "WAC": {
+    "teams": 7,
+    "rounds": [
+      {
+        "name": "Opening Round",
+        "slots": [
+          { "id": "OG1", "top": { "seed": 6 }, "bot": { "seed": 7 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 3 }, "bot": { "ref": "OG1" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "seed": 1 }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "seed": 2 }, "bot": { "ref": "QFG1" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "WCC": {
+    "teams": 12,
+    "rounds": [
+      {
+        "name": "First Round",
+        "slots": [
+          { "id": "R1G1", "top": { "seed": 5 }, "bot": { "seed": 12 } },
+          { "id": "R1G2", "top": { "seed": 8 }, "bot": { "seed": 9 } },
+          { "id": "R1G3", "top": { "seed": 6 }, "bot": { "seed": 11 } },
+          { "id": "R1G4", "top": { "seed": 7 }, "bot": { "seed": 10 } }
+        ]
+      },
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "ref": "R1G2" } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "ref": "R1G1" } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "ref": "R1G4" } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "ref": "R1G3" } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  },
+  "AmEast": {
+    "teams": 8,
+    "reseed": true,
+    "rounds": [
+      {
+        "name": "Quarterfinals",
+        "slots": [
+          { "id": "QFG1", "top": { "seed": 1 }, "bot": { "seed": 8 } },
+          { "id": "QFG2", "top": { "seed": 4 }, "bot": { "seed": 5 } },
+          { "id": "QFG3", "top": { "seed": 2 }, "bot": { "seed": 7 } },
+          { "id": "QFG4", "top": { "seed": 3 }, "bot": { "seed": 6 } }
+        ]
+      },
+      {
+        "name": "Semifinals",
+        "slots": [
+          { "id": "SFG1", "top": { "ref": "QFG1" }, "bot": { "ref": "QFG2" } },
+          { "id": "SFG2", "top": { "ref": "QFG3" }, "bot": { "ref": "QFG4" } }
+        ]
+      },
+      {
+        "name": "Championship",
+        "slots": [
+          { "id": "CG1", "top": { "ref": "SFG1" }, "bot": { "ref": "SFG2" } }
+        ]
+      }
+    ]
+  }
+}

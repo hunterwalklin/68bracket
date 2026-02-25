@@ -1,15 +1,21 @@
-"""Stage 2: Regressor for seed prediction (RF or XGBoost)."""
+"""Stage 2: Regressor for seed prediction."""
 
 import os
 
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Ridge
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 import joblib
 
 from config import (
     SEEDING_RF_PARAMS, SEEDING_XGB_PARAMS,
+    SEEDING_LGBM_PARAMS, SEEDING_CATBOOST_PARAMS,
+    SEEDING_LINEAR_PARAMS, SEEDING_MLP_PARAMS,
     ALL_FEATURES, MODEL_DIR, TEAMS_PER_SEED, SEEDS,
 )
 
@@ -162,10 +168,147 @@ class EnsembleSeedingModel(SeedingModel):
         self.is_fitted = True
 
 
+class LGBMSeedingModel(SeedingModel):
+    """LightGBM variant of the seeding regressor."""
+
+    def __init__(self):
+        from lightgbm import LGBMRegressor
+        self.model = LGBMRegressor(**SEEDING_LGBM_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "seeding_model_lgbm.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "seeding_model_lgbm.joblib"):
+        super().load(filename)
+
+
+class CatBoostSeedingModel(SeedingModel):
+    """CatBoost variant of the seeding regressor."""
+
+    def __init__(self):
+        from catboost import CatBoostRegressor
+        self.model = CatBoostRegressor(**SEEDING_CATBOOST_PARAMS)
+        self.is_fitted = False
+
+    def save(self, filename: str = "seeding_model_catboost.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "seeding_model_catboost.joblib"):
+        super().load(filename)
+
+
+class LinearSeedingModel(SeedingModel):
+    """Ridge regression (with StandardScaler) seeding regressor."""
+
+    def __init__(self):
+        self.model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("reg", Ridge(**SEEDING_LINEAR_PARAMS)),
+        ])
+        self.is_fitted = False
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        coefs = np.abs(self.model.named_steps["reg"].coef_)
+        importance = pd.DataFrame({
+            "feature": ALL_FEATURES,
+            "importance": coefs,
+        }).sort_values("importance", ascending=False)
+        return importance
+
+    def save(self, filename: str = "seeding_model_linear.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "seeding_model_linear.joblib"):
+        super().load(filename)
+
+
+class MLPSeedingModel(SeedingModel):
+    """MLP (with StandardScaler) seeding regressor."""
+
+    def __init__(self):
+        self.model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("reg", MLPRegressor(**SEEDING_MLP_PARAMS)),
+        ])
+        self.is_fitted = False
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        weights = np.abs(self.model.named_steps["reg"].coefs_[0])
+        importance_vals = weights.mean(axis=1)
+        importance = pd.DataFrame({
+            "feature": ALL_FEATURES,
+            "importance": importance_vals,
+        }).sort_values("importance", ascending=False)
+        return importance
+
+    def save(self, filename: str = "seeding_model_mlp.joblib"):
+        super().save(filename)
+
+    def load(self, filename: str = "seeding_model_mlp.joblib"):
+        super().load(filename)
+
+
+class FullEnsembleSeedingModel(SeedingModel):
+    """Averages all 6 seeding model predictions."""
+
+    def __init__(self):
+        self.models = [
+            SeedingModel(),
+            XGBSeedingModel(),
+            LGBMSeedingModel(),
+            CatBoostSeedingModel(),
+            LinearSeedingModel(),
+            MLPSeedingModel(),
+        ]
+        self.is_fitted = False
+
+    def train(self, X: pd.DataFrame, y: pd.Series):
+        for m in self.models:
+            m.train(X, y)
+        self.is_fitted = True
+
+    def predict_raw(self, X: pd.DataFrame) -> np.ndarray:
+        preds = np.column_stack([m.predict_raw(X) for m in self.models])
+        return preds.mean(axis=1)
+
+    def feature_importance(self) -> pd.DataFrame:
+        if not self.is_fitted:
+            return pd.DataFrame()
+        imps = [m.feature_importance().set_index("feature")["importance"]
+                for m in self.models]
+        avg = sum(imps) / len(imps)
+        return avg.reset_index().rename(columns={0: "importance"}).sort_values(
+            "importance", ascending=False)
+
+    def save(self, filename: str | None = None):
+        for m in self.models:
+            m.save()
+
+    def load(self, filename: str | None = None):
+        for m in self.models:
+            m.load()
+        self.is_fitted = True
+
+
 def get_seeding_model(model_type: str = "rf") -> SeedingModel:
     """Factory: return the right seeding model class."""
     if model_type == "xgb":
         return XGBSeedingModel()
+    if model_type == "lgbm":
+        return LGBMSeedingModel()
+    if model_type == "catboost":
+        return CatBoostSeedingModel()
+    if model_type == "linear":
+        return LinearSeedingModel()
+    if model_type == "mlp":
+        return MLPSeedingModel()
     if model_type == "ensemble":
         return EnsembleSeedingModel()
+    if model_type == "full_ensemble":
+        return FullEnsembleSeedingModel()
     return SeedingModel()

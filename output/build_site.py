@@ -26,6 +26,13 @@ if os.path.exists(_espn_conf_logos_path):
     with open(_espn_conf_logos_path, "r") as _f:
         _ESPN_CONF_LOGOS = json.load(_f)
 
+# Conference tournament bracket structures
+_CONF_BRACKETS = {}
+_brackets_path = os.path.join(DATA_DIR, "conf_tourney_brackets.json")
+if os.path.exists(_brackets_path):
+    with open(_brackets_path, "r") as _f:
+        _CONF_BRACKETS = json.load(_f)
+
 
 def _team_logo(school_id: str) -> str:
     """Return an <img> tag for a team's ESPN logo, or empty string if unknown."""
@@ -908,6 +915,62 @@ def _build_schedule_tab(stats_df: pd.DataFrame) -> str:
     return '<div id="schedule-app"></div>'
 
 
+def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
+    """Build the Conference Tournaments tab with projected seeds and live ESPN data."""
+    if stats_df is None:
+        return '<p style="color: var(--text-muted);">Conference tournament data not available. Run the predict command to generate.</p>'
+
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    # Build projected tournament seeds per conference (same sort as standings)
+    seeds_data = {}
+    for conf, grp in df.groupby("conference"):
+        grp = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True]).reset_index(drop=True)
+        teams = []
+        for i, r in grp.iterrows():
+            cw = r.get("conf_wins")
+            cl = r.get("conf_losses")
+            if pd.notna(cw) and pd.notna(cl):
+                conf_rec = f"{int(cw)}-{int(cl)}"
+            else:
+                conf_rec = "\u2014"
+            espn_id = _ESPN_LOGOS.get(str(r.get("school_id", "")), "")
+            teams.append({
+                "name": str(r.get("team", "")),
+                "espn": espn_id,
+                "seed": i + 1,
+                "net": int(r["net_ranking"]) if pd.notna(r.get("net_ranking")) else 999,
+                "confRec": conf_rec,
+            })
+        seeds_data[conf] = teams
+
+    blob = json.dumps(seeds_data, separators=(",", ":"))
+    logos_blob = json.dumps(_ESPN_CONF_LOGOS, separators=(",", ":"))
+    brackets_blob = json.dumps(_CONF_BRACKETS, separators=(",", ":"))
+
+    espn_conf_aliases = {
+        "Atlantic Coast Conference": "ACC", "Southeastern Conference": "SEC",
+        "Atlantic 10": "A-10", "Mid-American": "MAC", "Mountain West": "MWC",
+        "Missouri Valley": "MVC", "Ohio Valley": "OVC", "West Coast": "WCC",
+        "Metro Atlantic Athletic": "MAAC", "Northeast": "NEC",
+        "Horizon League": "Horizon", "Conference USA": "CUSA",
+        "Coastal Athletic Association": "CAA", "Colonial Athletic Association": "CAA",
+        "America East": "AmEast", "Atlantic Sun": "A-Sun",
+        "Big South-OVC": "Big South",
+    }
+    aliases_blob = json.dumps(espn_conf_aliases, separators=(",", ":"))
+
+    return (
+        f'<div id="conftourney-app"></div>'
+        f'<script>'
+        f'window.__CONF_TOURNEY_SEEDS__={blob};'
+        f'window.__CONF_LOGO_SLUGS__={logos_blob};'
+        f'window.__CONF_TOURNEY_BRACKETS__={brackets_blob};'
+        f'window.__ESPN_CONF_ALIASES__={aliases_blob};'
+        f'</script>'
+    )
+
+
 def _build_homecourt_tab(stats_df: pd.DataFrame) -> str:
     """Rank teams by KenPom-style home court advantage score.
 
@@ -1199,7 +1262,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", appoll_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", appoll_tab_html: str = "", conftourney_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -1743,6 +1806,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-conftourney:checked ~ .tab-nav .tab-bar label[for="tab-conftourney"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-summary:checked ~ #panel-summary {{ display: block; }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
@@ -1756,6 +1823,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-homecourt:checked ~ #panel-homecourt {{ display: block; }}
         #tab-standings:checked ~ #panel-standings {{ display: block; }}
         #tab-appoll:checked ~ #panel-appoll {{ display: block; }}
+        #tab-conftourney:checked ~ #panel-conftourney {{ display: block; }}
 
         /* AP Poll tab styling */
         .ap-week-select {{
@@ -1858,6 +1926,362 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         .title-pct.title-lock {{
             color: var(--green);
             font-weight: 700;
+        }}
+
+        /* Conference Tournaments tab */
+        .ct-conf {{
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        .ct-conf-summary {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1rem;
+            background: var(--surface);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            list-style: none;
+            user-select: none;
+        }}
+        .ct-conf-summary::-webkit-details-marker {{ display: none; }}
+        .ct-conf-summary::before {{
+            content: '\\25b6';
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            transition: transform 0.15s;
+        }}
+        details.ct-conf[open] > .ct-conf-summary::before {{
+            transform: rotate(90deg);
+        }}
+        .ct-conf-name {{
+            flex: 1;
+        }}
+        .ct-badge {{
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }}
+        .ct-badge-upcoming {{
+            background: var(--surface);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }}
+        .ct-badge-live {{
+            background: var(--green);
+            color: #fff;
+        }}
+        .ct-badge-complete {{
+            background: var(--accent);
+            color: #fff;
+        }}
+        .ct-seeds {{
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }}
+        .ct-seeds .team-logo {{
+            height: 18px;
+            width: 18px;
+            vertical-align: middle;
+            margin-right: 1px;
+        }}
+        .ct-round-header {{
+            padding: 0.5rem 1rem;
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            background: var(--bg);
+        }}
+        .ct-game-row {{
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            transition: background 0.1s;
+        }}
+        .ct-game-row:hover {{
+            background: var(--surface);
+        }}
+        .ct-game-teams {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }}
+        .ct-game-team {{
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }}
+        .ct-game-team .team-logo {{
+            height: 20px;
+            width: 20px;
+        }}
+        .ct-seed-num {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            min-width: 1.4rem;
+            text-align: right;
+        }}
+        .ct-team-name {{
+            font-weight: 500;
+        }}
+        .ct-winner {{
+            font-weight: 700;
+        }}
+        .ct-score {{
+            min-width: 1.8rem;
+            text-align: right;
+            font-weight: 600;
+        }}
+        .ct-game-center {{
+            text-align: center;
+            min-width: 100px;
+            font-size: 0.82rem;
+        }}
+        .ct-game-time {{
+            color: var(--text-muted);
+        }}
+        .ct-game-pred {{
+            font-size: 0.78rem;
+            color: var(--accent);
+        }}
+        .ct-live-badge {{
+            display: inline-block;
+            background: var(--green);
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            margin-right: 0.3rem;
+        }}
+        .ct-game-row.ct-live {{
+            border-left: 3px solid var(--green);
+        }}
+        .ct-game-row.ct-final {{
+            opacity: 0.85;
+        }}
+        .ct-loading {{
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }}
+        /* Bracket visual layout */
+        .ct-bracket-info {{
+            padding: 0.4rem 1rem;
+            font-size: 0.78rem;
+            font-style: italic;
+            color: var(--text-muted);
+        }}
+        .ct-bracket-wrap {{
+            overflow-x: auto;
+            padding: 0.75rem 0.5rem 0.75rem 0.75rem;
+            -webkit-overflow-scrolling: touch;
+        }}
+        .ct-bracket {{
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            min-width: max-content;
+        }}
+        .ct-round {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }}
+        .ct-round-label {{
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding-bottom: 0.4rem;
+            white-space: nowrap;
+        }}
+        .ct-round-games {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+        }}
+        .ct-matchup {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            min-height: 0;
+        }}
+        .ct-slot {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin: 0.15rem 0;
+            overflow: hidden;
+            min-width: 10rem;
+            max-width: 14rem;
+        }}
+        .ct-slot-team {{
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.2rem 0.45rem;
+            font-size: 0.78rem;
+            line-height: 1.3;
+            white-space: nowrap;
+        }}
+        .ct-slot-team + .ct-slot-team {{
+            border-top: 1px solid var(--border);
+        }}
+        .ct-slot-team .team-logo {{
+            height: 16px;
+            width: 16px;
+            flex-shrink: 0;
+        }}
+        .ct-slot-seed {{
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            min-width: 1.1rem;
+            text-align: right;
+            flex-shrink: 0;
+        }}
+        .ct-slot-name {{
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 500;
+        }}
+        .ct-slot-score {{
+            font-weight: 700;
+            font-size: 0.75rem;
+            min-width: 1.2rem;
+            text-align: right;
+        }}
+        .ct-slot-team.ct-slot-winner {{
+            background: color-mix(in srgb, var(--accent) 8%, transparent);
+        }}
+        .ct-slot-team.ct-slot-winner .ct-slot-name {{
+            font-weight: 700;
+        }}
+        .ct-slot-pred {{
+            text-align: center;
+            font-size: 0.65rem;
+            color: var(--accent);
+            padding: 0 0.3rem 0.15rem;
+            white-space: nowrap;
+        }}
+        .ct-slot.ct-slot-projected {{
+            opacity: 0.75;
+        }}
+        .ct-slot.ct-slot-projected:hover {{
+            opacity: 1;
+        }}
+        .ct-slot-tbd {{
+            font-style: italic;
+            color: var(--text-muted);
+            font-weight: 400;
+        }}
+        /* Connector column between rounds */
+        .ct-connectors {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            width: 1.5rem;
+            min-width: 1.5rem;
+            max-width: 1.5rem;
+        }}
+        .ct-connector {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            position: relative;
+        }}
+        .ct-conn-top, .ct-conn-bot {{
+            flex: 1;
+            box-sizing: border-box;
+        }}
+        .ct-conn-top {{
+            border-bottom: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+        }}
+        .ct-conn-bot {{
+            border-top: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+        }}
+        /* Horizontal line from connector to next matchup */
+        .ct-conn-out {{
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            width: 0.75rem;
+            min-width: 0.75rem;
+            max-width: 0.75rem;
+        }}
+        .ct-conn-line {{
+            flex: 1;
+            position: relative;
+        }}
+        .ct-conn-line::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            border-top: 1px solid var(--border);
+        }}
+        /* Bye placeholder — thin row that feeds into connector */
+        .ct-bye-slot {{
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 10rem;
+            max-width: 14rem;
+            margin: 0.15rem 0;
+            padding: 0.15rem 0.45rem;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-style: italic;
+            white-space: nowrap;
+        }}
+        .ct-bye-slot .team-logo {{
+            height: 14px;
+            width: 14px;
+        }}
+        @media (max-width: 600px) {{
+            .ct-slot {{
+                min-width: 8rem;
+                max-width: 11rem;
+            }}
+            .ct-bye-slot {{
+                min-width: 8rem;
+                max-width: 11rem;
+            }}
+            .ct-slot-team {{
+                font-size: 0.72rem;
+                padding: 0.15rem 0.3rem;
+            }}
+        }}
+        @media (max-width: 600px) {{
+            .ct-game-center {{
+                min-width: 70px;
+                font-size: 0.75rem;
+            }}
         }}
 
         /* Scores tab — interactive picker */
@@ -2893,6 +3317,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <input type="radio" name="tabs" id="tab-homecourt" class="tab-radio">
         <input type="radio" name="tabs" id="tab-standings" class="tab-radio">
         <input type="radio" name="tabs" id="tab-appoll" class="tab-radio">
+        <input type="radio" name="tabs" id="tab-conftourney" class="tab-radio">
 
         <div class="tab-nav">
             <div class="tab-bar">
@@ -2901,6 +3326,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 <label for="tab-bubble">Bubble Watch</label>
                 <label for="tab-schedule">Schedule</label>
                 <label for="tab-standings">Standings</label>
+                <label for="tab-conftourney">Conf Tourneys</label>
                 <label for="tab-matrix">Bracket Matrix</label>
                 <label for="tab-stats">Team Stats</label>
                 <label for="tab-ranking">Power Rankings</label>
@@ -2969,6 +3395,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <h2>Conference Standings</h2>
             <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0;">Title % shows each team's chance to win or share the regular season conference title based on 1,000 simulations of remaining games. Percentages can add up to over 100% because multiple teams can share a title in the same simulation.</p>
             {standings_tab_html if standings_tab_html else '<p style="color: var(--text-muted);">Standings data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-conftourney" class="tab-panel">
+            <h2>Conference Tournaments</h2>
+            {conftourney_tab_html if conftourney_tab_html else '<p style="color: var(--text-muted);">Conference tournament data not available. Run the predict command to generate.</p>'}
         </div>
 
         <div id="panel-autobid" class="tab-panel">
@@ -3359,7 +3790,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var a=sel[0],b=sel[1];
 
             /* KenPom-style prediction: additive efficiency model */
-            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
             var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var emA=a.oe-a.de, emB=b.oe-b.de;
             var spread=(emA-emB)*expectedPoss/100;
@@ -3374,7 +3805,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             }}
 
             /* Convert spread to win probability using logistic function */
-            var winA=1/(1+Math.pow(10,-spread/11));
+            var winA=1/(1+Math.pow(10,-spread/13));
             var winB=1-winA;
 
             var pctA=(winA*100).toFixed(1);
@@ -3441,7 +3872,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         function predict(a,b,homeId){{
             if(!a||!b)return null;
             /* KenPom-style additive efficiency model */
-            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
             var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
             var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
@@ -3457,10 +3888,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             }}
             /* Compress total toward pace-adjusted baseline (preserves spread) */
             var baseTotal=2*AVG_EFF*expectedPoss/100;
-            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
             var ptsA=total/2+spread/2;
             var ptsB=total/2-spread/2;
-            var winA=1/(1+Math.pow(10,-spread/11));
+            var winA=1/(1+Math.pow(10,-spread/13));
             /* Watchability: competitiveness (60%) + team quality (40%) */
             var comp=Math.max(0,1-Math.abs(spread)/20);
             var avgNet=(a.net+b.net)/2;
@@ -3770,6 +4201,617 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }});
     }})();
 
+    /* ── Conference Tournaments tab ── */
+    (function(){{
+        var app=document.getElementById('conftourney-app');
+        if(!app||!window.__SCORES_TEAMS__||!window.__CONF_TOURNEY_SEEDS__)return;
+        var teams=window.__SCORES_TEAMS__;
+        var seeds=window.__CONF_TOURNEY_SEEDS__;
+        var brackets=window.__CONF_TOURNEY_BRACKETS__||{{}};
+        var aliases=window.__ESPN_CONF_ALIASES__||{{}};
+        var CDN='https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/';
+        var CONF_CDN='https://a.espncdn.com/i/teamlogos/ncaa_conf/sml/trans/';
+        var API='https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
+        var SEASON={PREDICTION_SEASON};
+        var loaded=false;
+        var allGames=null;
+
+        var byEspn={{}},byName={{}};
+        teams.forEach(function(t){{
+            if(t.espn)byEspn[String(t.espn)]=t;
+            if(t.name)byName[t.name]=t;
+        }});
+
+        /* Conference logo slugs (reuse from server-embedded data) */
+        var confLogoSlugs=window.__CONF_LOGO_SLUGS__||{{}};
+
+        function pad(n){{return n<10?'0'+n:''+n;}}
+        function fmtDate(d){{return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());}}
+        function displayDate(d){{
+            var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return months[d.getMonth()]+' '+d.getDate();
+        }}
+
+        function predict(a,b,homeId){{
+            if(!a||!b)return null;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
+            var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
+            var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
+            var spread=rawA-rawB;
+            if(homeId){{
+                var ht=String(homeId)===String(a.espn)?a:(String(homeId)===String(b.espn)?b:null);
+                if(ht){{
+                    var pts=ht.hcaPts!==undefined?ht.hcaPts:3.2;
+                    if(String(homeId)===String(a.espn))spread+=pts;
+                    else spread-=pts;
+                }}
+            }}
+            var baseTotal=2*AVG_EFF*expectedPoss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
+            var ptsA=total/2+spread/2;
+            var ptsB=total/2-spread/2;
+            var winA=1/(1+Math.pow(10,-spread/13));
+            var rA=Math.round(ptsA),rB=Math.round(ptsB);
+            if(rA===rB){{if(spread>=0)rA+=1;else rB+=1;}}
+            return {{ptsA:rA,ptsB:rB,spread:spread,winA:winA}};
+        }}
+
+        /* Determine tournament date window: March 3-16 of the prediction season */
+        var startDate=new Date(SEASON,2,3);  /* Month is 0-indexed, 2=March */
+        var endDate=new Date(SEASON,2,16);
+
+        function fetchRange(){{
+            var dates=[];
+            var d=new Date(startDate);
+            while(d<=endDate){{
+                dates.push(fmtDate(d));
+                d=new Date(d);d.setDate(d.getDate()+1);
+            }}
+            var fetches=dates.map(function(ds){{
+                return fetch(API+'?dates='+ds+'&limit=200&groups=50')
+                    .then(function(r){{return r.json();}})
+                    .then(function(data){{return data.events||[];}})
+                    .catch(function(){{return [];}});
+            }});
+            return Promise.all(fetches).then(function(results){{
+                var all=[];
+                results.forEach(function(evts){{
+                    evts.forEach(function(ev){{all.push(ev);}});
+                }});
+                return all;
+            }});
+        }}
+
+        function parseTourneyGames(events){{
+            var games=[];
+            events.forEach(function(ev){{
+                var notes=ev.competitions&&ev.competitions[0]&&ev.competitions[0].notes;
+                if(!notes||!notes.length)return;
+                var headline=notes[0].headline||'';
+                if(headline.toLowerCase().indexOf('tournament')===-1)return;
+
+                var parts=headline.split(' - ');
+                var confName=parts[0].replace(' Tournament','').trim();
+                /* Normalize ESPN conference names to internal keys */
+                if(aliases[confName])confName=aliases[confName];
+                var roundName=parts.length>1?parts.slice(1).join(' - ').trim():'';
+
+                var comp=ev.competitions[0];
+                var away=null,home=null;
+                (comp.competitors||[]).forEach(function(c){{
+                    if(c.homeAway==='away')away=c;else home=c;
+                }});
+                if(!away||!home)return;
+
+                var awayId=away.team&&away.team.id?String(away.team.id):'';
+                var homeId=home.team&&home.team.id?String(home.team.id):'';
+                var awayTeam=byEspn[awayId]||null;
+                var homeTeam=byEspn[homeId]||null;
+                var awayName=away.team&&away.team.displayName?away.team.displayName:(awayTeam?awayTeam.name:'TBD');
+                var homeName=home.team&&home.team.displayName?home.team.displayName:(homeTeam?homeTeam.name:'TBD');
+
+                /* Try to find tournament seed from notes or curatedRank */
+                var awaySeed=away.curatedRank&&away.curatedRank.current?away.curatedRank.current:0;
+                var homeSeed=home.curatedRank&&home.curatedRank.current?home.curatedRank.current:0;
+
+                var status=comp.status||{{}};
+                var statusType=status.type||{{}};
+                var state=statusType.state||'pre';
+                var detail=statusType.shortDetail||statusType.detail||'';
+                var gameDate=comp.date||ev.date||'';
+
+                games.push({{
+                    conf:confName,
+                    round:roundName,
+                    awayName:awayName,homeName:homeName,
+                    awayId:awayId,homeId:homeId,
+                    awayTeam:awayTeam,homeTeam:homeTeam,
+                    awaySeed:awaySeed,homeSeed:homeSeed,
+                    awayScore:away.score?parseInt(away.score):0,
+                    homeScore:home.score?parseInt(home.score):0,
+                    state:state,detail:detail,
+                    gameDate:gameDate,
+                    pred:predict(awayTeam,homeTeam,homeId),
+                    headline:headline
+                }});
+            }});
+            return games;
+        }}
+
+        function confLogo(confName){{
+            var slug=confLogoSlugs[confName];
+            if(!slug)return '';
+            return '<img class="conf-logo" src="'+CONF_CDN+slug+'.gif" alt="" loading="lazy">';
+        }}
+
+        function teamLogo(espnId){{
+            if(!espnId)return '';
+            return '<img class="team-logo" src="'+CDN+espnId+'.png&h=20&w=20" alt="" loading="lazy">';
+        }}
+
+        /* ── Bracket projection engine ── */
+        function projectBracket(confName,confSeeds,bracketDef){{
+            if(!bracketDef||!confSeeds)return null;
+            var seedMap={{}};
+            confSeeds.forEach(function(s){{seedMap[s.seed]=s;}});
+            /* Build team stats lookup by name for predict() */
+            var teamStats={{}};
+            confSeeds.forEach(function(s){{
+                var t=s.espn?byEspn[String(s.espn)]:byName[s.name];
+                if(t)teamStats[s.seed]=t;
+            }});
+
+            var slotResults={{}};
+            bracketDef.rounds.forEach(function(rnd){{
+                rnd.slots.forEach(function(slot){{
+                    var topEntry=resolveEntry(slot.top,seedMap,slotResults,teamStats);
+                    var botEntry=resolveEntry(slot.bot,seedMap,slotResults,teamStats);
+                    var pred=null;
+                    var winner=null;
+                    if(topEntry.team&&botEntry.team){{
+                        pred=predict(topEntry.stats,botEntry.stats,null);
+                        winner=pred&&pred.spread>=0?'top':'bot';
+                    }}else if(topEntry.team){{
+                        winner='top';
+                    }}else if(botEntry.team){{
+                        winner='bot';
+                    }}
+                    slotResults[slot.id]={{
+                        top:topEntry,bot:botEntry,
+                        pred:pred,winner:winner,
+                        winnerEntry:winner==='top'?topEntry:winner==='bot'?botEntry:null
+                    }};
+                }});
+            }});
+            return slotResults;
+        }}
+
+        function resolveEntry(entry,seedMap,slotResults,teamStats){{
+            if(entry.seed!==undefined){{
+                var s=seedMap[entry.seed];
+                return {{
+                    seed:entry.seed,
+                    team:s||null,
+                    stats:teamStats[entry.seed]||null,
+                    label:s?'('+entry.seed+') '+s.name:'('+entry.seed+')'
+                }};
+            }}else if(entry.ref){{
+                var prev=slotResults[entry.ref];
+                if(prev&&prev.winnerEntry){{
+                    return prev.winnerEntry;
+                }}
+                /* Can't resolve yet — show TBD with ref info */
+                return {{seed:null,team:null,stats:null,ref:entry.ref,label:'TBD'}};
+            }}
+            return {{seed:null,team:null,stats:null,label:'TBD'}};
+        }}
+
+        function renderProjectedBracket(confName,confSeeds,bracketDef){{
+            var projection=projectBracket(confName,confSeeds,bracketDef);
+            if(!projection)return '';
+
+            var seedMap={{}};
+            confSeeds.forEach(function(s){{seedMap[s.seed]=s;}});
+            var numTeams=bracketDef.teams;
+            var rounds=bracketDef.rounds;
+            var firstRound=rounds[0].name;
+            var lastRound=rounds[rounds.length-1].name;
+            var reseedNote=bracketDef.reseed?' &middot; Reseeded':'';
+
+            var html='<div class="ct-bracket-info">'+numTeams+'-team bracket &middot; '+firstRound+' through '+lastRound+reseedNote+' &middot; Seeds based on current conference standings</div>';
+            html+='<div class="ct-bracket-wrap"><div class="ct-bracket">';
+
+            /*
+             * Build a positional layout: each round column has N "visual rows".
+             * The first round defines the base positions.
+             * Later rounds' matchups align to the midpoint of the two feeder positions.
+             *
+             * We assign each slot a vertical position index (fractional ok).
+             * First round slots get positions 0, 1, 2, ...
+             * Each later slot is centered between its two feeder slots.
+             * Bye entries (seed not from ref) get their own position alongside.
+             */
+
+            /* For each slot, compute a vertical position */
+            var slotPos={{}};
+            var firstRoundSlots=rounds[0].slots;
+            /* Assign base positions for round 0 */
+            firstRoundSlots.forEach(function(slot,i){{
+                slotPos[slot.id]=i;
+            }});
+
+            /* For later rounds, each slot feeds from top/bot entries.
+               If an entry is a ref, its position is the position of that ref slot.
+               If an entry is a seed (bye), we assign it based on the other entry or interpolation.
+               The slot itself sits at the midpoint. */
+            for(var ri=1;ri<rounds.length;ri++){{
+                var rnd=rounds[ri];
+                rnd.slots.forEach(function(slot,si){{
+                    var topPos=null,botPos=null;
+                    if(slot.top.ref&&slotPos[slot.top.ref]!==undefined)topPos=slotPos[slot.top.ref];
+                    if(slot.bot.ref&&slotPos[slot.bot.ref]!==undefined)botPos=slotPos[slot.bot.ref];
+                    /* If one side is a bye (seed), estimate its position near the other feeder */
+                    if(topPos!==null&&botPos!==null){{
+                        slotPos[slot.id]=(topPos+botPos)/2;
+                    }}else if(topPos!==null){{
+                        /* bot is a bye; place slot slightly below top feeder */
+                        slotPos[slot.id]=topPos+0.5;
+                    }}else if(botPos!==null){{
+                        slotPos[slot.id]=botPos-0.5;
+                    }}else{{
+                        /* Both sides are byes (e.g., Ivy SF) */
+                        slotPos[slot.id]=si;
+                    }}
+                }});
+            }}
+
+            /* Render each round as a column */
+            for(var ri=0;ri<rounds.length;ri++){{
+                var rnd=rounds[ri];
+                var isLast=(ri===rounds.length-1);
+
+                /* Round column: label + games */
+                html+='<div class="ct-round">';
+                html+='<div class="ct-round-label">'+rnd.name+'</div>';
+                html+='<div class="ct-round-games">';
+
+                rnd.slots.forEach(function(slot){{
+                    var res=projection[slot.id];
+                    if(!res)return;
+                    html+='<div class="ct-matchup">';
+                    html+=renderSlot(res,slot,projection);
+                    html+='</div>';
+                }});
+
+                html+='</div></div>'; /* close ct-round-games, ct-round */
+
+                /* Connector column between this round and the next */
+                if(!isLast){{
+                    var nextRnd=rounds[ri+1];
+                    html+='<div class="ct-connectors">';
+                    nextRnd.slots.forEach(function(nslot){{
+                        /* Each next-round slot may have 0, 1, or 2 ref feeders from this round */
+                        var topRef=(nslot.top.ref&&hasSlot(rnd,nslot.top.ref));
+                        var botRef=(nslot.bot.ref&&hasSlot(rnd,nslot.bot.ref));
+                        if(topRef&&botRef){{
+                            /* Two feeders: draw merge connector */
+                            html+='<div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div>';
+                        }}else if(topRef||botRef){{
+                            /* One feeder: straight line */
+                            html+='<div class="ct-connector"><div class="ct-conn-line"></div></div>';
+                        }}else{{
+                            /* No feeders from this round (both are byes) — spacer */
+                            html+='<div class="ct-connector"></div>';
+                        }}
+                    }});
+                    html+='</div>';
+                    /* Small outgoing line column */
+                    html+='<div class="ct-conn-out">';
+                    nextRnd.slots.forEach(function(nslot){{
+                        html+='<div class="ct-conn-line"></div>';
+                    }});
+                    html+='</div>';
+                }}
+            }}
+
+            /* Champion projection */
+            var finalSlot=rounds[rounds.length-1].slots[0];
+            var finalRes=projection[finalSlot.id];
+            if(finalRes&&finalRes.winnerEntry&&finalRes.winnerEntry.team){{
+                var w=finalRes.winnerEntry;
+                var wLogo=w.team.espn?teamLogo(w.team.espn):'';
+                html+='<div class="ct-round"><div class="ct-round-label">Champion</div>'
+                    +'<div class="ct-round-games"><div class="ct-matchup">'
+                    +'<div class="ct-slot ct-slot-projected" style="min-width:auto"><div class="ct-slot-team ct-slot-winner">'
+                    +(w.seed?'<span class="ct-slot-seed">'+w.seed+'</span>':'')
+                    +wLogo+'<span class="ct-slot-name stats-team" data-team="'+w.team.name+'" style="cursor:pointer">'+w.team.name+'</span>'
+                    +'</div></div></div></div></div>';
+            }}
+
+            html+='</div></div>'; /* close ct-bracket, ct-bracket-wrap */
+            return html;
+        }}
+
+        function hasSlot(rnd,slotId){{
+            for(var i=0;i<rnd.slots.length;i++){{
+                if(rnd.slots[i].id===slotId)return true;
+            }}
+            return false;
+        }}
+
+        function renderSlot(res,slot,projection){{
+            var topE=res.top,botE=res.bot;
+            var topLogo=topE.team&&topE.team.espn?teamLogo(topE.team.espn):'';
+            var botLogo=botE.team&&botE.team.espn?teamLogo(botE.team.espn):'';
+            var topWin=res.winner==='top';
+            var botWin=res.winner==='bot';
+
+            var predHtml='';
+            if(res.pred){{
+                var diff=Math.abs(res.pred.spread).toFixed(1);
+                var pct=(Math.max(res.pred.winA,1-res.pred.winA)*100).toFixed(0);
+                predHtml='<div class="ct-slot-pred">-'+diff+' ('+pct+'%)</div>';
+            }}
+
+            var h='<div class="ct-slot ct-slot-projected">';
+            h+=renderSlotTeam(topE,topLogo,topWin);
+            h+=renderSlotTeam(botE,botLogo,botWin);
+            if(predHtml)h+=predHtml;
+            h+='</div>';
+            return h;
+        }}
+
+        function renderSlotTeam(entry,logo,isWinner){{
+            var cls='ct-slot-team'+(isWinner?' ct-slot-winner':'');
+            var seedHtml=entry.seed?'<span class="ct-slot-seed">'+entry.seed+'</span>':'<span class="ct-slot-seed"></span>';
+            var nameHtml;
+            if(entry.team){{
+                nameHtml='<span class="ct-slot-name stats-team" data-team="'+entry.team.name+'" style="cursor:pointer">'+entry.team.name+'</span>';
+            }}else{{
+                nameHtml='<span class="ct-slot-name ct-slot-tbd">TBD</span>';
+            }}
+            return '<div class="'+cls+'">'+seedHtml+logo+nameHtml+'</div>';
+        }}
+
+        function renderGame(g){{
+            var cls='ct-game-row';
+            if(g.state==='in')cls+=' ct-live';
+            else if(g.state==='post')cls+=' ct-final';
+
+            var awayLogo=g.awayTeam?teamLogo(g.awayTeam.espn):(g.awayId?teamLogo(g.awayId):'');
+            var homeLogo=g.homeTeam?teamLogo(g.homeTeam.espn):(g.homeId?teamLogo(g.homeId):'');
+
+            var awaySeedStr=g.awaySeed?'<span class="ct-seed-num">('+g.awaySeed+')</span>':'';
+            var homeSeedStr=g.homeSeed?'<span class="ct-seed-num">('+g.homeSeed+')</span>':'';
+
+            var awayWon=g.state==='post'&&g.awayScore>g.homeScore;
+            var homeWon=g.state==='post'&&g.homeScore>g.awayScore;
+            var awayNameCls='ct-team-name'+(awayWon?' ct-winner':'');
+            var homeNameCls='ct-team-name'+(homeWon?' ct-winner':'');
+
+            var teamsHtml='<div class="ct-game-teams">'
+                +'<div class="ct-game-team">'+awaySeedStr+awayLogo
+                +'<span class="'+awayNameCls+'">'+g.awayName+'</span>'
+                +(g.state!=='pre'?'<span class="ct-score'+(awayWon?' ct-winner':'')+'">'+g.awayScore+'</span>':'')
+                +'</div>'
+                +'<div class="ct-game-team">'+homeSeedStr+homeLogo
+                +'<span class="'+homeNameCls+'">'+g.homeName+'</span>'
+                +(g.state!=='pre'?'<span class="ct-score'+(homeWon?' ct-winner':'')+'">'+g.homeScore+'</span>':'')
+                +'</div>'
+                +'</div>';
+
+            var centerHtml='<div class="ct-game-center">';
+            if(g.state==='post'){{
+                centerHtml+='<div class="ct-game-time">Final</div>';
+            }}else if(g.state==='in'){{
+                centerHtml+='<span class="ct-live-badge">LIVE</span><span class="ct-game-time">'+g.detail+'</span>';
+            }}else{{
+                /* Pre-game */
+                if(g.detail){{
+                    centerHtml+='<div class="ct-game-time">'+g.detail+'</div>';
+                }}else if(g.gameDate){{
+                    try{{
+                        var d=new Date(g.gameDate);
+                        var h=d.getHours(),m=d.getMinutes();
+                        var ampm=h>=12?'PM':'AM';
+                        h=h%12;if(h===0)h=12;
+                        centerHtml+='<div class="ct-game-time">'+h+':'+pad(m)+' '+ampm+'</div>';
+                    }}catch(e){{}}
+                }}
+                if(g.pred){{
+                    var fav=g.pred.spread>=0?g.awayName:g.homeName;
+                    var diff=Math.abs(g.pred.spread).toFixed(1);
+                    var pct=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                    centerHtml+='<div class="ct-game-pred">'+fav+' -'+diff+' ('+pct+'%)</div>';
+                }}
+            }}
+            centerHtml+='</div>';
+
+            return '<div class="'+cls+'">'+teamsHtml+centerHtml+'</div>';
+        }}
+
+        function renderConf(confName,confSeeds,confGames){{
+            /* Determine conference status */
+            var hasLive=confGames.some(function(g){{return g.state==='in';}});
+            var hasPre=confGames.some(function(g){{return g.state==='pre';}});
+            var allPost=confGames.length>0&&confGames.every(function(g){{return g.state==='post';}});
+            var badge='';
+            if(hasLive)badge='<span class="ct-badge ct-badge-live">Live</span>';
+            else if(allPost)badge='<span class="ct-badge ct-badge-complete">Complete</span>';
+            else if(confGames.length>0&&!hasPre)badge='<span class="ct-badge ct-badge-complete">Complete</span>';
+            else badge='<span class="ct-badge ct-badge-upcoming">Upcoming</span>';
+
+            var openAttr=hasLive?' open':'';
+            if(confGames.length===0)openAttr='';
+
+            var logo=confLogo(confName);
+
+            var bracketDef=brackets[confName]||null;
+
+            /* Seeds line */
+            var seedsHtml='';
+            if(confSeeds&&confSeeds.length>0){{
+                seedsHtml='<div class="ct-seeds"><strong>Seeds:</strong> ';
+                confSeeds.forEach(function(s,i){{
+                    var sLogo=s.espn?teamLogo(s.espn):'';
+                    seedsHtml+=(i>0?', ':'')+s.seed+'. '+sLogo+'<span class="stats-team" data-team="'+s.name+'" style="cursor:pointer">'+s.name+'</span>';
+                }});
+                seedsHtml+='</div>';
+            }}
+
+            var gamesHtml='';
+
+            if(confGames.length===0&&confSeeds&&bracketDef){{
+                /* Pre-tournament: show projected bracket */
+                var qualSeeds=confSeeds.slice(0,bracketDef.teams);
+                gamesHtml=renderProjectedBracket(confName,qualSeeds,bracketDef);
+            }}else if(confGames.length>0){{
+                /* Tournament in progress: show ESPN games grouped by round */
+                var rounds=[];
+                var roundMap={{}};
+                confGames.forEach(function(g){{
+                    var key=g.round||'Games';
+                    if(!roundMap[key]){{
+                        roundMap[key]=[];
+                        rounds.push(key);
+                    }}
+                    roundMap[key].push(g);
+                }});
+
+                rounds.forEach(function(rnd){{
+                    var firstGame=roundMap[rnd][0];
+                    var dateStr='';
+                    if(firstGame&&firstGame.gameDate){{
+                        try{{
+                            var d=new Date(firstGame.gameDate);
+                            dateStr=' &mdash; '+displayDate(d);
+                        }}catch(e){{}}
+                    }}
+                    gamesHtml+='<div class="ct-round-header">'+rnd+dateStr+'</div>';
+                    roundMap[rnd].forEach(function(g){{
+                        gamesHtml+=renderGame(g);
+                    }});
+                }});
+            }}else if(confSeeds){{
+                gamesHtml='<div style="padding:0.5rem 1rem;color:var(--text-muted);font-size:0.82rem;">Tournament has not started yet.</div>';
+            }}
+
+            return '<details class="ct-conf"'+openAttr+'>'
+                +'<summary class="ct-conf-summary">'+logo
+                +'<span class="ct-conf-name">'+confName+' Tournament</span>'
+                +badge+'</summary>'
+                +seedsHtml+gamesHtml
+                +'</details>';
+        }}
+
+        function renderAll(games){{
+            /* Group games by conference */
+            var confGamesMap={{}};
+            (games||[]).forEach(function(g){{
+                if(!confGamesMap[g.conf])confGamesMap[g.conf]=[];
+                confGamesMap[g.conf].push(g);
+            }});
+
+            /* Build list of all conferences (from seeds + any found in games) */
+            var allConfs={{}};
+            for(var c in seeds)allConfs[c]=true;
+            for(var c2 in confGamesMap)allConfs[c2]=true;
+            var confList=Object.keys(allConfs);
+
+            /* Sort by projected bids descending (power conferences first) */
+            confList.sort(function(a,b){{
+                var aGames=(confGamesMap[a]||[]);
+                var bGames=(confGamesMap[b]||[]);
+                var aLive=aGames.some(function(g){{return g.state==='in';}});
+                var bLive=bGames.some(function(g){{return g.state==='in';}});
+                if(aLive&&!bLive)return -1;
+                if(!aLive&&bLive)return 1;
+                var aSize=seeds[a]?seeds[a].length:0;
+                var bSize=seeds[b]?seeds[b].length:0;
+                return bSize-aSize;
+            }});
+
+            var html='';
+            confList.forEach(function(c){{
+                html+=renderConf(c,seeds[c]||null,confGamesMap[c]||[]);
+            }});
+
+            if(!html)html='<div class="ct-loading">No conference tournament data available yet.</div>';
+            app.innerHTML=html;
+        }}
+
+        /* Auto-refresh for live games — 30s polling */
+        var refreshTimer=null;
+        var REFRESH_INTERVAL=30000;
+
+        function hasLiveGames(){{
+            if(!allGames)return false;
+            return allGames.some(function(g){{return g.state==='in';}});
+        }}
+
+        function refreshData(){{
+            fetchRange().then(function(events){{
+                allGames=parseTourneyGames(events);
+                renderAll(allGames);
+                startAutoRefresh();
+            }});
+        }}
+
+        function startAutoRefresh(){{
+            stopAutoRefresh();
+            if(hasLiveGames()){{
+                refreshTimer=setInterval(refreshData,REFRESH_INTERVAL);
+            }}
+        }}
+
+        function stopAutoRefresh(){{
+            if(refreshTimer){{clearInterval(refreshTimer);refreshTimer=null;}}
+        }}
+
+        function initTab(){{
+            if(!loaded){{
+                loaded=true;
+                /* Check if we're in the tournament window */
+                var now=new Date();
+                var windowStart=new Date(startDate);
+                windowStart.setDate(windowStart.getDate()-2); /* Allow a couple days early */
+
+                if(now>=windowStart){{
+                    app.innerHTML='<div class="ct-loading">Loading conference tournament games...</div>';
+                    fetchRange().then(function(events){{
+                        allGames=parseTourneyGames(events);
+                        renderAll(allGames);
+                        startAutoRefresh();
+                    }}).catch(function(){{
+                        renderAll([]);
+                    }});
+                }}else{{
+                    /* Before tournament window — show projected seeds only */
+                    renderAll([]);
+                }}
+            }}else{{
+                startAutoRefresh();
+            }}
+        }}
+
+        var ctRadio=document.getElementById('tab-conftourney');
+        if(ctRadio){{
+            ctRadio.addEventListener('change',function(){{
+                if(this.checked)initTab();
+                else stopAutoRefresh();
+            }});
+            if(ctRadio.checked)initTab();
+        }}
+
+        /* Stop polling when switching to another tab */
+        document.querySelectorAll('.tab-radio').forEach(function(r){{
+            if(r.id!=='tab-conftourney'){{
+                r.addEventListener('change',function(){{stopAutoRefresh();}});
+            }}
+        }});
+    }})();
+
     /* ── Conference Title Simulation ── */
     (function(){{
         if(!window.__SCORES_TEAMS__)return;
@@ -3791,7 +4833,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function predict(a,b,homeId){{
             if(!a||!b)return 0.5;
-            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
             var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var spread=((a.oe-a.de)-(b.oe-b.de))*expectedPoss/100;
             if(homeId){{
@@ -3802,7 +4844,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     else spread-=pts;
                 }}
             }}
-            return 1/(1+Math.pow(10,-spread/11));
+            return 1/(1+Math.pow(10,-spread/13));
         }}
 
         function fetchSchedule(espnId){{
@@ -3988,7 +5030,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function predict(a,b,homeId){{
             if(!a||!b)return null;
-            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
             var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
             var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
@@ -4002,10 +5044,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 }}
             }}
             var baseTotal=2*AVG_EFF*expectedPoss/100;
-            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
             var ptsA=total/2+spread/2;
             var ptsB=total/2-spread/2;
-            var winA=1/(1+Math.pow(10,-spread/11));
+            var winA=1/(1+Math.pow(10,-spread/13));
             var comp=Math.max(0,1-Math.abs(spread)/20);
             var avgNet=(a.net+b.net)/2;
             var qual=Math.max(0,1-avgNet/200);
@@ -4835,12 +5877,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 {{label:'Neutral',home:null}},
                 {{label:b.name+' Home',home:b}}
             ];
-            var AVG_EFF=100.3,AVG_TEMPO=67.5;
+            var AVG_EFF=97.5,AVG_TEMPO=67.5;
             var expectedPoss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
             var rawA=(a.oe+b.de-AVG_EFF)*expectedPoss/100;
             var rawB=(b.oe+a.de-AVG_EFF)*expectedPoss/100;
             var baseTotal=2*AVG_EFF*expectedPoss/100;
-            var total=baseTotal+(rawA+rawB-baseTotal)*0.75;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
             var neutralSpread=rawA-rawB;
             for(var v=0;v<venues.length;v++){{
                 var venue=venues[v];
@@ -5154,9 +6196,14 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
     # Build AP Poll tab
     appoll_tab_html = _build_ap_poll_tab()
 
+    # Build conference tournaments tab
+    conftourney_tab_html = ""
+    if stats_df is not None:
+        conftourney_tab_html = _build_conf_tourney_tab(stats_df)
+
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, appoll_tab_html=appoll_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, appoll_tab_html=appoll_tab_html, conftourney_tab_html=conftourney_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:

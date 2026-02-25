@@ -19,6 +19,26 @@ import pandas as pd
 from config import REGIONS, SEEDS, TEAMS_PER_SEED, QUADRANTS, TEAM_LOCATIONS_PATH, VENUES_PATH
 
 
+def sort_by_true_seed(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort teams within each seed line by true seed order.
+
+    Uses raw_seed as primary key, then breaks ties with a composite of
+    committee ranking metrics (NET + SOR + KPI - WAB) so the overall
+    strongest team on each line is listed first.
+    """
+    if "raw_seed" not in df.columns:
+        return df.sort_values("selection_prob", ascending=False)
+    df = df.copy()
+    net = df["net_ranking"].fillna(999) if "net_ranking" in df.columns else 999
+    sor = df["sor"].fillna(999) if "sor" in df.columns else 999
+    kpi = df["kpi"].fillna(999) if "kpi" in df.columns else 999
+    wab = -(df["wab"].fillna(0) if "wab" in df.columns else 0)
+    df["_sort_tiebreak"] = net + sor + kpi + wab
+    df = df.sort_values(["raw_seed", "_sort_tiebreak"], ascending=[True, True])
+    df = df.drop(columns=["_sort_tiebreak"])
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -261,8 +281,8 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["region"] = ""
 
-    sort_col = "raw_seed" if "raw_seed" in df.columns else "selection_prob"
-    ascending = sort_col == "raw_seed"
+    # Pre-sort so within each seed line the strongest team comes first.
+    df = sort_by_true_seed(df)
 
     # ------------------------------------------------------------------
     # Step 1: Build S-curve slot list for the 64 direct-placement teams
@@ -270,7 +290,6 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
     slots = []
     for seed in SEEDS:
         direct = df[(df["predicted_seed"] == seed) & (~df["first_four"])]
-        direct = direct.sort_values(sort_col, ascending=ascending)
 
         n = min(4, len(direct))
         s_curve = _build_s_curve(seed)[:n]
@@ -312,9 +331,9 @@ def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
     #   remaining 2 region slots.
     # ------------------------------------------------------------------
     for ff_seed in (11, 16):
-        ff_teams = df[
+        ff_teams = sort_by_true_seed(df[
             (df["predicted_seed"] == ff_seed) & (df["first_four"])
-        ].sort_values(sort_col, ascending=ascending)
+        ])
 
         direct_regions = {
             s["region"] for s in slots if s["seed"] == ff_seed
@@ -392,7 +411,7 @@ def build_first_four(df: pd.DataFrame) -> list[dict]:
     for seed in [11, 16]:
         seed_ff = ff_teams[ff_teams["predicted_seed"] == seed]
         if len(seed_ff) >= 2:
-            teams = seed_ff.sort_values("raw_seed" if "raw_seed" in seed_ff.columns else "selection_prob")
+            teams = sort_by_true_seed(seed_ff)
             for i in range(0, len(teams) - 1, 2):
                 games.append({
                     "seed": seed,

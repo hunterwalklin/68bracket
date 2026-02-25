@@ -11,6 +11,19 @@ from config import (
     ALL_FEATURES, MODEL_DIR,
 )
 
+MODEL_CHOICES = ["rf", "xgb", "lgbm", "catboost", "linear", "mlp", "ensemble", "full_ensemble"]
+
+MODEL_LABELS = {
+    "rf": "Random Forest",
+    "xgb": "XGBoost",
+    "lgbm": "LightGBM",
+    "catboost": "CatBoost",
+    "linear": "Linear (LogReg/Ridge)",
+    "mlp": "MLP Neural Net",
+    "ensemble": "Ensemble (RF + XGB)",
+    "full_ensemble": "Full Ensemble (All 6)",
+}
+
 
 def cmd_scrape(args):
     """Scrape all data sources."""
@@ -184,8 +197,7 @@ def cmd_train(args):
     from models.stage2_seeding import get_seeding_model
 
     model_type = getattr(args, "model", "rf")
-    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
-    print(f"Model: {model_label}")
+    print(f"Model: {MODEL_LABELS[model_type]}")
 
     print("Loading features...")
     df = load_features()
@@ -211,8 +223,7 @@ def cmd_evaluate(args):
     from models.evaluate import leave_one_season_out_cv, print_feature_importance
 
     model_type = getattr(args, "model", "rf")
-    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
-    print(f"Model: {model_label}")
+    print(f"Model: {MODEL_LABELS[model_type]}")
 
     print("Loading features...")
     df = load_features()
@@ -236,8 +247,7 @@ def cmd_predict(args):
     )
 
     model_type = getattr(args, "model", "rf")
-    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
-    print(f"Model: {model_label}")
+    print(f"Model: {MODEL_LABELS[model_type]}")
 
     season = args.season or PREDICTION_SEASON
 
@@ -388,10 +398,9 @@ def cmd_predict(args):
 def cmd_all(args):
     """Run the full pipeline: scrape, build, train, evaluate, predict."""
     model_type = getattr(args, "model", "rf")
-    model_label = {"rf": "Random Forest", "xgb": "XGBoost", "ensemble": "Ensemble (RF + XGB)"}[model_type]
 
     print("=" * 60)
-    print(f"  68bracket - Full Pipeline ({model_label})")
+    print(f"  68bracket - Full Pipeline ({MODEL_LABELS[model_type]})")
     print("=" * 60)
 
     args.include_current = True
@@ -455,27 +464,27 @@ Commands:
 
     # Train
     train_parser = subparsers.add_parser("train", help="Train models")
-    train_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
-                              help="Model type: rf (Random Forest) or xgb (XGBoost)")
+    train_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
+                              help="Model type (default: rf)")
 
     # Evaluate
     eval_parser = subparsers.add_parser("evaluate", help="Run cross-validation")
     eval_parser.add_argument("--importance", action="store_true",
                              help="Show feature importance analysis")
-    eval_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
-                             help="Model type: rf (Random Forest) or xgb (XGBoost)")
+    eval_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
+                             help="Model type (default: rf)")
 
     # Predict
     pred_parser = subparsers.add_parser("predict", help="Generate predictions")
     pred_parser.add_argument("--season", type=int, default=None,
                              help=f"Season to predict (default: {PREDICTION_SEASON})")
-    pred_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
-                             help="Model type: rf (Random Forest) or xgb (XGBoost)")
+    pred_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
+                             help="Model type (default: rf)")
 
     # All
     all_parser = subparsers.add_parser("all", help="Run the full pipeline")
-    all_parser.add_argument("--model", choices=["rf", "xgb", "ensemble"], default="rf",
-                            help="Model type: rf (Random Forest) or xgb (XGBoost)")
+    all_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
+                            help="Model type (default: rf)")
 
     args = parser.parse_args()
 

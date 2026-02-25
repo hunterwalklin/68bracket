@@ -139,6 +139,77 @@ SEEDING_XGB_PARAMS = {
     "n_jobs": -1,
 }
 
+SELECTION_LGBM_PARAMS = {
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "scale_pos_weight": 4.4,
+    "random_state": 42,
+    "n_jobs": -1,
+    "verbose": -1,
+}
+
+SEEDING_LGBM_PARAMS = {
+    "n_estimators": 500,
+    "max_depth": 5,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42,
+    "n_jobs": -1,
+    "verbose": -1,
+}
+
+SELECTION_CATBOOST_PARAMS = {
+    "iterations": 500,
+    "depth": 6,
+    "learning_rate": 0.1,
+    "auto_class_weights": "Balanced",
+    "random_seed": 42,
+    "verbose": 0,
+}
+
+SEEDING_CATBOOST_PARAMS = {
+    "iterations": 500,
+    "depth": 5,
+    "learning_rate": 0.1,
+    "random_seed": 42,
+    "verbose": 0,
+}
+
+SELECTION_LINEAR_PARAMS = {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "max_iter": 1000,
+    "random_state": 42,
+    "solver": "lbfgs",
+}
+
+SEEDING_LINEAR_PARAMS = {
+    "alpha": 1.0,
+    "random_state": 42,
+}
+
+SELECTION_MLP_PARAMS = {
+    "hidden_layer_sizes": (128, 64),
+    "activation": "relu",
+    "max_iter": 500,
+    "random_state": 42,
+    "early_stopping": True,
+    "validation_fraction": 0.15,
+}
+
+SEEDING_MLP_PARAMS = {
+    "hidden_layer_sizes": (128, 64),
+    "activation": "relu",
+    "max_iter": 500,
+    "random_state": 42,
+    "early_stopping": True,
+    "validation_fraction": 0.15,
+}
+
 # Power Rankings — display-only composite score (not a model feature)
 # Z-score normalized, then weighted. Negative weight = lower raw value is better.
 POWER_RANKING_WEIGHTS = {
