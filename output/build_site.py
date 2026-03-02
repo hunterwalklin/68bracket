@@ -960,7 +960,7 @@ def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
         "Northeast Conference": "NEC", "West Coast Conference": "WCC",
         "Ivy League": "Ivy", "Patriot League": "Patriot",
         "Summit League": "Summit", "Southland Conference": "Southland",
-        "Southern Conference": "Southern",
+        "Southern Conference": "Southern", "ASUN": "A-Sun", "SoCon": "Southern",
     }
     aliases_blob = json.dumps(espn_conf_aliases, separators=(",", ":"))
 
