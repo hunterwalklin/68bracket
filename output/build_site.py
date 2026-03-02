@@ -957,6 +957,10 @@ def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
         "Coastal Athletic Association": "CAA", "Colonial Athletic Association": "CAA",
         "America East": "AmEast", "Atlantic Sun": "A-Sun",
         "Big South-OVC": "Big South",
+        "Northeast Conference": "NEC", "West Coast Conference": "WCC",
+        "Ivy League": "Ivy", "Patriot League": "Patriot",
+        "Summit League": "Summit", "Southland Conference": "Southland",
+        "Southern Conference": "Southern",
     }
     aliases_blob = json.dumps(espn_conf_aliases, separators=(",", ":"))
 
@@ -4292,9 +4296,24 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 if(headline.toLowerCase().indexOf('tournament')===-1)return;
 
                 var parts=headline.split(' - ');
-                var confName=parts[0].replace(' Tournament','').trim();
+                var confName=parts[0].replace(' Tournament','').replace(/\s*(Championship|Championships)\s*/gi,'').trim();
+                /* Strip sponsor branding: "T. Rowe Price ACC" -> "ACC", "Ivy League pres. by TIAA" -> "Ivy League" */
+                confName=confName.replace(/\s+pres\.?\s+by\s+.+$/i,'').trim();
                 /* Normalize ESPN conference names to internal keys */
                 if(aliases[confName])confName=aliases[confName];
+                /* Fallback: check if any known conf key or alias value is contained in the name */
+                if(!seeds[confName]){{
+                    var allKeys=Object.keys(seeds);
+                    for(var ki=0;ki<allKeys.length;ki++){{
+                        var k=allKeys[ki];
+                        if(confName.indexOf(k)!==-1||k.indexOf(confName)!==-1){{confName=k;break;}}
+                    }}
+                    if(!seeds[confName]){{
+                        for(var ak in aliases){{
+                            if(confName.indexOf(ak)!==-1){{confName=aliases[ak];break;}}
+                        }}
+                    }}
+                }}
                 var roundName=parts.length>1?parts.slice(1).join(' - ').trim():'';
 
                 var comp=ev.competitions[0];
@@ -4311,9 +4330,9 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var awayName=away.team&&away.team.displayName?away.team.displayName:(awayTeam?awayTeam.name:'TBD');
                 var homeName=home.team&&home.team.displayName?home.team.displayName:(homeTeam?homeTeam.name:'TBD');
 
-                /* Try to find tournament seed from notes or curatedRank */
-                var awaySeed=away.curatedRank&&away.curatedRank.current?away.curatedRank.current:0;
-                var homeSeed=home.curatedRank&&home.curatedRank.current?home.curatedRank.current:0;
+                /* Try to find tournament seed from notes or curatedRank (ESPN uses 99 for unranked) */
+                var awaySeed=away.curatedRank&&away.curatedRank.current&&away.curatedRank.current<26?away.curatedRank.current:0;
+                var homeSeed=home.curatedRank&&home.curatedRank.current&&home.curatedRank.current<26?home.curatedRank.current:0;
 
                 var status=comp.status||{{}};
                 var statusType=status.type||{{}};
