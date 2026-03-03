@@ -4772,34 +4772,86 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 rndMap[key].push(g);
             }});
 
-            /* Build seed ranking from conference records (wins desc, losses asc).
-               ESPN provides vsconf records on each competitor — this is what
-               determines conference tournament seeding. */
-            var teamRecMap={{}};
-            confGames.forEach(function(g){{
-                if(g.homeConfRec&&g.homeName&&g.homeName!=='TBD'){{
-                    var key=g.homeId||g.homeName.toLowerCase();
-                    if(!teamRecMap[key])teamRecMap[key]={{name:g.homeName,id:g.homeId,w:g.homeConfRec.w,l:g.homeConfRec.l}};
-                }}
-                if(g.awayConfRec&&g.awayName&&g.awayName!=='TBD'){{
-                    var key=g.awayId||g.awayName.toLowerCase();
-                    if(!teamRecMap[key])teamRecMap[key]={{name:g.awayName,id:g.awayId,w:g.awayConfRec.w,l:g.awayConfRec.l}};
-                }}
+            /* Build seed ranking from conference records + ESPN game order.
+               ESPN lists games in bracket order: within each round, games go
+               from lowest home seed to highest (e.g. 4v5, 3v6, 2v7, 1v8).
+               So the home team in the LAST game of the earliest round is seed 1,
+               and the home team in the FIRST game is the lowest-seeded home team.
+               We use this to assign seeds directly from ESPN's game order. */
+            var firstRndGames=rndMap[rnds[0]]||[];
+            var numTeams=bracketDef.teams;
+            /* Count known games (both teams set) in the first round */
+            var knownFirst=firstRndGames.filter(function(g){{
+                return g.homeName&&g.homeName!=='TBD'&&g.awayName&&g.awayName!=='TBD';
             }});
-            var teamRank=Object.keys(teamRecMap).map(function(k){{return teamRecMap[k];}});
-            teamRank.sort(function(a,b){{
-                if(b.w!==a.w)return b.w-a.w;
-                return a.l-b.l;
-            }});
-            /* Assign seed numbers: rank position = seed */
-            teamRank.forEach(function(t,i){{
-                assignSeed(t.id,t.name,i+1);
+            var tdbFirst=firstRndGames.filter(function(g){{
+                return g.awayName==='TBD'||g.homeName==='TBD';
             }});
 
-            /* Reorder ESPN games within each round to match bracket def slot pattern.
-               Use conf-record seeds to match games to bracket slots. */
+            /* For known first-round games: ESPN descending home-seed order.
+               Last known game's home = highest seed among first-round home teams.
+               E.g., for NEC 8-team: 4 known games, last game's home = seed 1. */
+            /* Determine the starting seed for first-round home teams.
+               In a bracket with byes, first-round seeds start after bye seeds.
+               Bye teams = numTeams - 2*firstRoundGames, so first-round highest home seed
+               = numTeams - 2*knownFirst.length + 1 ... actually it depends on bracket def. */
+
+            /* Simpler: use the bracket def to determine which seeds are in each round. */
             var defRounds=bracketDef.rounds;
+
+            /* Walk bracket def rounds and ESPN rounds together to assign seeds.
+               For each round: known games are in descending home-seed order from ESPN.
+               Bye/TBD games are in ascending seed order. */
             var numMatch=Math.min(defRounds.length,rnds.length);
+            for(var mi=0;mi<numMatch;mi++){{
+                var defSlots=defRounds[mi].slots;
+                var espnGames=rndMap[rnds[mi]];
+
+                /* Collect all seed values from this round's bracket def slots */
+                var byeSeeds=[];  /* seeds from slots with a ref (bye team enters) */
+                var matchSeeds=[]; /* seed pairs from fully-seeded slots */
+                defSlots.forEach(function(sl){{
+                    var hasRef=sl.top.ref||sl.bot.ref;
+                    if(hasRef){{
+                        if(sl.top.seed)byeSeeds.push(sl.top.seed);
+                        if(sl.bot.seed)byeSeeds.push(sl.bot.seed);
+                    }}else{{
+                        if(sl.top.seed&&sl.bot.seed){{
+                            matchSeeds.push({{hi:Math.min(sl.top.seed,sl.bot.seed),lo:Math.max(sl.top.seed,sl.bot.seed)}});
+                        }}
+                    }}
+                }});
+
+                /* Sort: bye seeds ascending (ESPN lists bye games seed 1,2,3...) */
+                byeSeeds.sort(function(a,b){{return a-b;}});
+                /* Sort match pairs by home seed DESCENDING (ESPN lists 4v5 before 3v6 before 2v7 before 1v8) */
+                matchSeeds.sort(function(a,b){{return b.hi-a.hi;}});
+
+                /* Split ESPN games into TBD and known */
+                var tdbG=[],knownG=[];
+                espnGames.forEach(function(g){{
+                    if(g.awayName==='TBD'||g.homeName==='TBD'||g.awayId==='-1'||g.awayId==='-2')tdbG.push(g);
+                    else knownG.push(g);
+                }});
+
+                /* Assign seeds: bye games get ascending bye seeds */
+                var bi=0;
+                tdbG.forEach(function(g){{
+                    if(bi<byeSeeds.length)assignSeed(g.homeId,g.homeName,byeSeeds[bi++]);
+                }});
+                /* Known games get match pair seeds (descending home seed order) */
+                var ki2=0;
+                knownG.forEach(function(g){{
+                    if(ki2<matchSeeds.length){{
+                        assignSeed(g.homeId,g.homeName,matchSeeds[ki2].hi);
+                        assignSeed(g.awayId,g.awayName,matchSeeds[ki2].lo);
+                        ki2++;
+                    }}
+                }});
+            }}
+
+            /* Reorder ESPN games within each round to match bracket def slot pattern.
+               Use assigned seeds to match games to bracket slots. */
             for(var mi=0;mi<numMatch;mi++){{
                 var defSlots=defRounds[mi].slots;
                 var espnGames=rndMap[rnds[mi]];
