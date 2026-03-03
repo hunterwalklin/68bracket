@@ -1940,7 +1940,7 @@
             <h1><span class="logo">68</span>bracket</h1>
             <div class="subtitle">NCAA Tournament Predictions - 2025-26</div>
             <div class="tagline">Machine-learning bracket projections, updated daily with the latest team metrics and game results.</div>
-            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 10:18 PM CST</div>
+            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 10:37 PM CST</div>
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
@@ -5612,33 +5612,23 @@
                     }
                 });
 
-                /* Sort: bye seeds ascending (ESPN lists bye games seed 1,2,3...) */
-                byeSeeds.sort(function(a,b){return a-b;});
-                /* Sort match pairs by hi ascending (best/lowest seed first) */
-                matchSeeds.sort(function(a,b){return a.hi-b.hi;});
-
-                /* Split ESPN games into TBD and known */
-                var tdbG=[],knownG=[];
-                espnGames.forEach(function(g){
-                    if(g.awayName==='TBD'||g.homeName==='TBD'||g.awayId==='-1'||g.awayId==='-2')tdbG.push(g);
-                    else knownG.push(g);
+                /* Build unified seed assignment list from bracket def slots.
+                   bye = only home team gets a seed (ref slot).
+                   match = both teams get seeds (fully seeded slot). */
+                var seedAssigns=[];
+                byeSeeds.forEach(function(s){seedAssigns.push({type:'bye',seed:s});});
+                matchSeeds.forEach(function(m){seedAssigns.push({type:'match',hi:m.hi,lo:m.lo});});
+                /* Sort by seed value ascending (best/lowest seed first) */
+                seedAssigns.sort(function(a,b){
+                    var av=a.type==='bye'?a.seed:a.hi;
+                    var bv=b.type==='bye'?b.seed:b.hi;
+                    return av-bv;
                 });
 
-                /* Sort known games by home team conf wins DESCENDING (most wins = best seed).
-                   This matches games to seed pairs regardless of ESPN game ordering,
-                   which varies across conferences (some ascending, some descending). */
-                knownG.sort(function(a,b){
-                    var aw=a.homeConfRec?a.homeConfRec.w:0;
-                    var bw=b.homeConfRec?b.homeConfRec.w:0;
-                    if(bw!==aw)return bw-aw;
-                    /* Tiebreak: fewer losses first */
-                    var al=a.homeConfRec?a.homeConfRec.l:99;
-                    var bl=b.homeConfRec?b.homeConfRec.l:99;
-                    return al-bl;
-                });
-
-                /* Sort TBD/bye games by home team conf wins DESCENDING too */
-                tdbG.sort(function(a,b){
+                /* Sort ALL ESPN games by home team conf wins DESCENDING.
+                   This works regardless of ESPN game ordering (varies across conferences)
+                   and regardless of whether games are TBD or known. */
+                var sortedGames=espnGames.slice().sort(function(a,b){
                     var aw=a.homeConfRec?a.homeConfRec.w:0;
                     var bw=b.homeConfRec?b.homeConfRec.w:0;
                     if(bw!==aw)return bw-aw;
@@ -5647,93 +5637,67 @@
                     return al-bl;
                 });
 
-                /* Assign seeds: bye games get ascending bye seeds (best record = best seed) */
-                var bi=0;
-                tdbG.forEach(function(g){
-                    if(bi<byeSeeds.length)assignSeed(g.homeId,g.homeName,byeSeeds[bi++]);
-                });
-                /* Known games get match pair seeds: best record → best (lowest) seed */
-                var ki2=0;
-                knownG.forEach(function(g){
-                    if(ki2<matchSeeds.length){
-                        assignSeed(g.homeId,g.homeName,matchSeeds[ki2].hi);
-                        assignSeed(g.awayId,g.awayName,matchSeeds[ki2].lo);
-                        ki2++;
+                /* Match: best home record → best (lowest) seed number */
+                for(var si=0;si<Math.min(sortedGames.length,seedAssigns.length);si++){
+                    var sg=sortedGames[si];
+                    var sa=seedAssigns[si];
+                    if(sa.type==='bye'){
+                        assignSeed(sg.homeId,sg.homeName,sa.seed);
+                    }else{
+                        assignSeed(sg.homeId,sg.homeName,sa.hi);
+                        assignSeed(sg.awayId,sg.awayName,sa.lo);
                     }
-                });
+                }
             }
 
             /* Reorder ESPN games within each round to match bracket def slot pattern.
-               Use assigned seeds to match games to bracket slots. */
+               Use assigned seeds to match each game to its correct bracket position. */
             for(var mi=0;mi<numMatch;mi++){
                 var defSlots=defRounds[mi].slots;
                 var espnGames=rndMap[rnds[mi]];
-                /* Split ESPN games into TBD and known */
-                var tdbQ=[],knownQ=[];
-                espnGames.forEach(function(g){
-                    if(g.awayName==='TBD'||g.homeName==='TBD'||g.awayId==='-1'||g.awayId==='-2')tdbQ.push(g);
-                    else knownQ.push(g);
-                });
-                /* Split bracket slots into ref (expects TBD) and seeded (both seeds) */
-                var refIdxs=[],seedIdxs=[];
-                defSlots.forEach(function(sl,idx){
-                    if(sl.top.ref||sl.bot.ref)refIdxs.push(idx);
-                    else seedIdxs.push(idx);
+
+                /* For each bracket def slot, determine expected home team seed */
+                var slotExpected=defSlots.map(function(sl){
+                    var seeds=[];
+                    if(sl.top.seed)seeds.push(sl.top.seed);
+                    if(sl.bot.seed)seeds.push(sl.bot.seed);
+                    return seeds.length>0?Math.min.apply(null,seeds):0;
                 });
 
-                /* Match known games to seeded slots by seed sum.
-                   Each bracket slot has a seed pair (e.g. 1v8=sum9, 4v5=sum9).
-                   Use the home team's conf-record seed to find the matching slot. */
-                if(knownQ.length>0&&seedIdxs.length>0){
-                    /* For each known game, find the home team's seed from seedMap */
-                    var gameSeeds=knownQ.map(function(g,i){
-                        var hs=seedMap[g.homeId]||seedMap[(g.homeName||'').toLowerCase()]||99;
-                        return {gi:i,homeSeed:hs};
-                    });
-                    /* For each seeded slot, find the higher seed (min) */
-                    var slotSeeds=seedIdxs.map(function(idx){
-                        var sl=defSlots[idx];
-                        return {idx:idx,highSeed:Math.min(sl.top.seed||99,sl.bot.seed||99)};
-                    });
-                    /* Match: game whose home team seed equals slot's higher seed */
-                    var slotGameMap={};
-                    var usedGames={};
-                    slotSeeds.forEach(function(ss){
-                        for(var gi=0;gi<gameSeeds.length;gi++){
-                            if(!usedGames[gi]&&gameSeeds[gi].homeSeed===ss.highSeed){
-                                slotGameMap[ss.idx]=knownQ[gi];
-                                usedGames[gi]=true;
-                                return;
-                            }
+                /* Find home team seed for each ESPN game from seedMap */
+                var gameHomeSeed=espnGames.map(function(g,i){
+                    return {idx:i,seed:seedMap[g.homeId]||seedMap[(g.homeName||'').toLowerCase()]||0};
+                });
+
+                /* Match each slot to the game whose home team has the expected seed */
+                var slotGameMap={};
+                var usedGames={};
+                defSlots.forEach(function(sl,si){
+                    var expected=slotExpected[si];
+                    if(!expected)return;
+                    for(var gi=0;gi<gameHomeSeed.length;gi++){
+                        if(!usedGames[gi]&&gameHomeSeed[gi].seed===expected){
+                            slotGameMap[si]=espnGames[gi];
+                            usedGames[gi]=true;
+                            return;
                         }
-                    });
-                    /* Fallback: assign remaining games by index */
-                    var remaining=[];
-                    knownQ.forEach(function(g,i){if(!usedGames[i])remaining.push(g);});
-                    var ri2=0;
-                    seedIdxs.forEach(function(idx){
-                        if(!slotGameMap[idx]&&ri2<remaining.length)slotGameMap[idx]=remaining[ri2++];
-                    });
-                    /* Reorder knownQ to follow bracket def slot order */
-                    var orderedKnown=[];
-                    seedIdxs.forEach(function(idx){
-                        if(slotGameMap[idx])orderedKnown.push(slotGameMap[idx]);
-                    });
-                    knownQ=orderedKnown;
-                }
-
-                /* Rebuild game list following bracket def slot order */
-                var reordered=[];
-                var ti=0,ki=0;
-                defSlots.forEach(function(sl){
-                    var hasRef=sl.top.ref||sl.bot.ref;
-                    if(hasRef&&ti<tdbQ.length)reordered.push(tdbQ[ti++]);
-                    else if(!hasRef&&ki<knownQ.length)reordered.push(knownQ[ki++]);
-                    else if(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
-                    else if(ki<knownQ.length)reordered.push(knownQ[ki++]);
+                    }
                 });
-                while(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
-                while(ki<knownQ.length)reordered.push(knownQ[ki++]);
+
+                /* Assign remaining unmatched games to remaining slots */
+                var remaining=[];
+                espnGames.forEach(function(g,i){if(!usedGames[i])remaining.push(g);});
+                var ri2=0;
+                defSlots.forEach(function(sl,si){
+                    if(!slotGameMap[si]&&ri2<remaining.length)slotGameMap[si]=remaining[ri2++];
+                });
+
+                /* Rebuild in bracket def slot order */
+                var reordered=[];
+                defSlots.forEach(function(sl,si){
+                    if(slotGameMap[si])reordered.push(slotGameMap[si]);
+                });
+                while(ri2<remaining.length)reordered.push(remaining[ri2++]);
                 rndMap[rnds[mi]]=reordered;
             }
             /* Apply inferred seeds to all games */
