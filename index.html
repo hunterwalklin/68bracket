@@ -1940,7 +1940,7 @@
             <h1><span class="logo">68</span>bracket</h1>
             <div class="subtitle">NCAA Tournament Predictions - 2025-26</div>
             <div class="tagline">Machine-learning bracket projections, updated daily with the latest team metrics and game results.</div>
-            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 09:38 PM CST</div>
+            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 09:50 PM CST</div>
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
@@ -5549,21 +5549,54 @@
             });
 
             /* Reorder ESPN games within each round to match bracket def slot pattern.
-               ESPN may group bye games (with TBD) separately from seeded games,
-               but the bracket def interleaves them. We reorder so index-based
-               matching works for both seed inference and visual layout. */
+               Two matching strategies:
+               1. TBD/known split: bye games (TBD opponent) match ref slots,
+                  known games match seeded slots.
+               2. Spread-based: for all-known rounds, match games to slots by
+                  predicted spread — largest mismatch → highest seed spread slot. */
             var defRounds=bracketDef.rounds;
             var numMatch=Math.min(defRounds.length,rnds.length);
             for(var mi=0;mi<numMatch;mi++){
                 var defSlots=defRounds[mi].slots;
                 var espnGames=rndMap[rnds[mi]];
-                /* Split ESPN games into TBD (one team TBD) and known (both teams set) */
+                /* Split ESPN games into TBD and known */
                 var tdbQ=[],knownQ=[];
                 espnGames.forEach(function(g){
                     if(g.awayName==='TBD'||g.homeName==='TBD'||g.awayId==='-1'||g.awayId==='-2')tdbQ.push(g);
                     else knownQ.push(g);
                 });
-                /* Rebuild game list following bracket def slot pattern */
+                /* Split bracket slots into ref (expects TBD) and seeded (both seeds) */
+                var refIdxs=[],seedIdxs=[];
+                defSlots.forEach(function(sl,idx){
+                    if(sl.top.ref||sl.bot.ref)refIdxs.push(idx);
+                    else seedIdxs.push(idx);
+                });
+
+                /* For known games matching seeded slots: sort both by spread
+                   to match biggest mismatch → highest seed-spread slot */
+                if(knownQ.length>0&&seedIdxs.length>0){
+                    var slotSpread=seedIdxs.map(function(idx){
+                        var sl=defSlots[idx];
+                        return {idx:idx,spread:Math.abs((sl.top.seed||0)-(sl.bot.seed||0))};
+                    });
+                    slotSpread.sort(function(a,b){return b.spread-a.spread;});
+                    var gameSpread=knownQ.map(function(g,i){
+                        return {gi:i,spread:g.pred?Math.abs(g.pred.spread):0};
+                    });
+                    gameSpread.sort(function(a,b){return b.spread-a.spread;});
+                    /* Build assignment: bracket slot index → known game */
+                    var slotGameMap={};
+                    var mc=Math.min(slotSpread.length,gameSpread.length);
+                    for(var i=0;i<mc;i++)slotGameMap[slotSpread[i].idx]=knownQ[gameSpread[i].gi];
+                    /* Reorder knownQ to follow bracket def order */
+                    var orderedKnown=[];
+                    seedIdxs.forEach(function(idx){
+                        if(slotGameMap[idx])orderedKnown.push(slotGameMap[idx]);
+                    });
+                    knownQ=orderedKnown;
+                }
+
+                /* Rebuild game list following bracket def slot order */
                 var reordered=[];
                 var ti=0,ki=0;
                 defSlots.forEach(function(sl){
@@ -5573,22 +5606,19 @@
                     else if(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
                     else if(ki<knownQ.length)reordered.push(knownQ[ki++]);
                 });
-                /* Append any remaining games not matched to slots */
                 while(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
                 while(ki<knownQ.length)reordered.push(knownQ[ki++]);
                 rndMap[rnds[mi]]=reordered;
 
-                /* Now assign seeds from bracket def slots to the reordered ESPN games */
+                /* Assign seeds from bracket def slots to reordered ESPN games */
                 var ns=Math.min(defSlots.length,reordered.length);
                 for(var si=0;si<ns;si++){
                     var sl=defSlots[si],gm=reordered[si];
                     var ts=sl.top.seed||0,bs=sl.bot.seed||0;
                     if(ts&&bs){
-                        /* Both seeded (e.g. R1): home=higher seed, away=lower seed */
                         assignSeed(gm.homeId,gm.homeName,Math.min(ts,bs));
                         assignSeed(gm.awayId,gm.awayName,Math.max(ts,bs));
                     }else if(ts){
-                        /* One side is a bye seed */
                         assignSeed(gm.homeId,gm.homeName,ts);
                     }else if(bs){
                         assignSeed(gm.homeId,gm.homeName,bs);
