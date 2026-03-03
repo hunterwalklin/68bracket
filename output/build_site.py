@@ -4758,23 +4758,47 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 rndMap[key].push(g);
             }});
 
-            /* Match ESPN rounds to bracket def rounds by index (both chronological).
-               For each slot, assign seeds from the bracket def to ESPN teams. */
+            /* Reorder ESPN games within each round to match bracket def slot pattern.
+               ESPN may group bye games (with TBD) separately from seeded games,
+               but the bracket def interleaves them. We reorder so index-based
+               matching works for both seed inference and visual layout. */
             var defRounds=bracketDef.rounds;
             var numMatch=Math.min(defRounds.length,rnds.length);
             for(var mi=0;mi<numMatch;mi++){{
                 var defSlots=defRounds[mi].slots;
                 var espnGames=rndMap[rnds[mi]];
-                var ns=Math.min(defSlots.length,espnGames.length);
+                /* Split ESPN games into TBD (one team TBD) and known (both teams set) */
+                var tdbQ=[],knownQ=[];
+                espnGames.forEach(function(g){{
+                    if(g.awayName==='TBD'||g.homeName==='TBD'||g.awayId==='-1'||g.awayId==='-2')tdbQ.push(g);
+                    else knownQ.push(g);
+                }});
+                /* Rebuild game list following bracket def slot pattern */
+                var reordered=[];
+                var ti=0,ki=0;
+                defSlots.forEach(function(sl){{
+                    var hasRef=sl.top.ref||sl.bot.ref;
+                    if(hasRef&&ti<tdbQ.length)reordered.push(tdbQ[ti++]);
+                    else if(!hasRef&&ki<knownQ.length)reordered.push(knownQ[ki++]);
+                    else if(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
+                    else if(ki<knownQ.length)reordered.push(knownQ[ki++]);
+                }});
+                /* Append any remaining games not matched to slots */
+                while(ti<tdbQ.length)reordered.push(tdbQ[ti++]);
+                while(ki<knownQ.length)reordered.push(knownQ[ki++]);
+                rndMap[rnds[mi]]=reordered;
+
+                /* Now assign seeds from bracket def slots to the reordered ESPN games */
+                var ns=Math.min(defSlots.length,reordered.length);
                 for(var si=0;si<ns;si++){{
-                    var sl=defSlots[si],gm=espnGames[si];
+                    var sl=defSlots[si],gm=reordered[si];
                     var ts=sl.top.seed||0,bs=sl.bot.seed||0;
                     if(ts&&bs){{
                         /* Both seeded (e.g. R1): home=higher seed, away=lower seed */
                         assignSeed(gm.homeId,gm.homeName,Math.min(ts,bs));
                         assignSeed(gm.awayId,gm.awayName,Math.max(ts,bs));
                     }}else if(ts){{
-                        /* Bye team (top has seed): home=bye=higher seed */
+                        /* One side is a bye seed */
                         assignSeed(gm.homeId,gm.homeName,ts);
                     }}else if(bs){{
                         assignSeed(gm.homeId,gm.homeName,bs);
