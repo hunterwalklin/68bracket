@@ -1919,7 +1919,7 @@
             <h1><span class="logo">68</span>bracket</h1>
             <div class="subtitle">NCAA Tournament Predictions - 2025-26</div>
             <div class="tagline">Machine-learning bracket projections, updated daily with the latest team metrics and game results.</div>
-            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 04:13 PM CST</div>
+            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 08:48 PM CST</div>
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
@@ -5083,7 +5083,7 @@
                 var notes=ev.competitions&&ev.competitions[0]&&ev.competitions[0].notes;
                 if(!notes||!notes.length)return;
                 var headline=notes[0].headline||'';
-                if(headline.toLowerCase().indexOf('tournament')===-1)return;
+                var hl=headline.toLowerCase();if(hl.indexOf('tournament')===-1&&hl.indexOf('championship')===-1)return;
 
                 var parts=headline.split(' - ');
                 var confName=parts[0].replace(' Tournament','').replace(/\s*(Championship|Championships)\s*/gi,'').trim();
