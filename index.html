@@ -807,6 +807,27 @@
         .ct-slot.ct-slot-projected:hover {
             opacity: 1;
         }
+        .ct-slot.ct-slot-live {
+            border-color: var(--green);
+            box-shadow: 0 0 0 1px var(--green);
+        }
+        .ct-slot.ct-slot-final {
+            opacity: 0.85;
+        }
+        .ct-slot-status {
+            text-align: center;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            padding: 0.1rem 0.3rem 0.15rem;
+            white-space: nowrap;
+        }
+        .ct-slot-score {
+            font-weight: 700;
+            font-size: 0.75rem;
+            min-width: 1.2rem;
+            text-align: right;
+            margin-left: auto;
+        }
         .ct-slot-tbd {
             font-style: italic;
             color: var(--text-muted);
@@ -1919,7 +1940,7 @@
             <h1><span class="logo">68</span>bracket</h1>
             <div class="subtitle">NCAA Tournament Predictions - 2025-26</div>
             <div class="tagline">Machine-learning bracket projections, updated daily with the latest team metrics and game results.</div>
-            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 08:48 PM CST</div>
+            <div class="timestamp">Model: Ensemble (RF + XGB) &middot; Data updated: March 02, 2026 at 09:05 PM CST</div>
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
@@ -5440,6 +5461,126 @@
             return '<div class="'+cls+'">'+teamsHtml+centerHtml+'</div>';
         }
 
+        function renderEspnSlot(g){
+            var awayWon=g.state==='post'&&g.awayScore>g.homeScore;
+            var homeWon=g.state==='post'&&g.homeScore>g.awayScore;
+            var isLive=g.state==='in';
+
+            var cls='ct-slot';
+            if(isLive)cls+=' ct-slot-live';
+            else if(g.state==='post')cls+=' ct-slot-final';
+
+            var awaySeedH=g.awaySeed?'<span class="ct-slot-seed">'+g.awaySeed+'</span>':'<span class="ct-slot-seed"></span>';
+            var homeSeedH=g.homeSeed?'<span class="ct-slot-seed">'+g.homeSeed+'</span>':'<span class="ct-slot-seed"></span>';
+
+            var awayLogo=g.awayTeam?teamLogo(g.awayTeam.espn):(g.awayId?teamLogo(g.awayId):'');
+            var homeLogo=g.homeTeam?teamLogo(g.homeTeam.espn):(g.homeId?teamLogo(g.homeId):'');
+
+            var awayIsTbd=g.awayName==='TBD'||!g.awayName;
+            var homeIsTbd=g.homeName==='TBD'||!g.homeName;
+
+            var awayTeamCls='ct-slot-team'+(awayWon?' ct-slot-winner':'');
+            var homeTeamCls='ct-slot-team'+(homeWon?' ct-slot-winner':'');
+            var showScore=g.state!=='pre';
+
+            var s='<div class="'+cls+'">';
+            s+='<div class="'+awayTeamCls+'">'+awaySeedH+awayLogo;
+            if(awayIsTbd)s+='<span class="ct-slot-name ct-slot-tbd">TBD</span>';
+            else s+='<span class="ct-slot-name stats-team" data-team="'+g.awayName+'" style="cursor:pointer">'+g.awayName+'</span>';
+            if(showScore)s+='<span class="ct-slot-score'+(awayWon?' ct-winner':'')+'">'+g.awayScore+'</span>';
+            s+='</div>';
+
+            s+='<div class="'+homeTeamCls+'">'+homeSeedH+homeLogo;
+            if(homeIsTbd)s+='<span class="ct-slot-name ct-slot-tbd">TBD</span>';
+            else s+='<span class="ct-slot-name stats-team" data-team="'+g.homeName+'" style="cursor:pointer">'+g.homeName+'</span>';
+            if(showScore)s+='<span class="ct-slot-score'+(homeWon?' ct-winner':'')+'">'+g.homeScore+'</span>';
+            s+='</div>';
+
+            /* Status line */
+            if(isLive){
+                s+='<div class="ct-slot-status"><span class="ct-live-badge">LIVE</span> '+g.detail+'</div>';
+            }else if(g.state==='post'){
+                s+='<div class="ct-slot-status">Final</div>';
+            }else if(g.detail){
+                s+='<div class="ct-slot-status">'+g.detail+'</div>';
+            }else if(g.gameDate){
+                try{
+                    var dt=new Date(g.gameDate);
+                    var hh=dt.getHours(),mm=dt.getMinutes();
+                    var ap=hh>=12?'PM':'AM';
+                    hh=hh%12;if(hh===0)hh=12;
+                    s+='<div class="ct-slot-status">'+hh+':'+pad(mm)+' '+ap+'</div>';
+                }catch(e){}
+            }
+
+            /* Prediction */
+            if(g.state==='pre'&&g.pred){
+                var fav=g.pred.spread>=0?g.awayName:g.homeName;
+                var diff=Math.abs(g.pred.spread).toFixed(1);
+                var pct=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
+                s+='<div class="ct-slot-pred">'+fav+' -'+diff+' ('+pct+'%)</div>';
+            }
+
+            s+='</div>';
+            return s;
+        }
+
+        function renderEspnBracket(confGames,bracketDef){
+            /* Group games by round, preserving first-seen order */
+            var rnds=[];
+            var rndMap={};
+            confGames.forEach(function(g){
+                var key=g.round||'Games';
+                if(!rndMap[key]){
+                    rndMap[key]=[];
+                    rnds.push(key);
+                }
+                rndMap[key].push(g);
+            });
+
+            var html='<div class="ct-bracket-wrap"><div class="ct-bracket">';
+
+            for(var ri=0;ri<rnds.length;ri++){
+                var rnd=rnds[ri];
+                var rndGames=rndMap[rnd];
+                var isLast=(ri===rnds.length-1);
+
+                html+='<div class="ct-round">';
+                html+='<div class="ct-round-label">'+rnd+'</div>';
+                html+='<div class="ct-round-games">';
+
+                rndGames.forEach(function(g){
+                    html+='<div class="ct-matchup">';
+                    html+=renderEspnSlot(g);
+                    html+='</div>';
+                });
+
+                html+='</div></div>';
+
+                /* Connectors between this round and the next */
+                if(!isLast){
+                    var nextGames=rndMap[rnds[ri+1]];
+                    html+='<div class="ct-connectors">';
+                    nextGames.forEach(function(){
+                        if(rndGames.length>=nextGames.length*2){
+                            html+='<div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div>';
+                        }else{
+                            html+='<div class="ct-connector"><div class="ct-conn-line"></div></div>';
+                        }
+                    });
+                    html+='</div>';
+                    html+='<div class="ct-conn-out">';
+                    nextGames.forEach(function(){
+                        html+='<div class="ct-conn-line"></div>';
+                    });
+                    html+='</div>';
+                }
+            }
+
+            html+='</div></div>';
+            return html;
+        }
+
         function renderConf(confName,confSeeds,confGames){
             /* Determine conference status */
             var hasLive=confGames.some(function(g){return g.state==='in';});
@@ -5475,8 +5616,11 @@
                 /* Pre-tournament: show projected bracket */
                 var qualSeeds=confSeeds.slice(0,bracketDef.teams);
                 gamesHtml=renderProjectedBracket(confName,qualSeeds,bracketDef);
+            }else if(confGames.length>0&&bracketDef){
+                /* ESPN games + bracket definition: show bracket layout */
+                gamesHtml=renderEspnBracket(confGames,bracketDef);
             }else if(confGames.length>0){
-                /* Tournament in progress: show ESPN games grouped by round */
+                /* ESPN games but no bracket definition: flat list fallback */
                 var rounds=[];
                 var roundMap={};
                 confGames.forEach(function(g){
