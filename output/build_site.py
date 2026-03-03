@@ -4293,7 +4293,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var notes=ev.competitions&&ev.competitions[0]&&ev.competitions[0].notes;
                 if(!notes||!notes.length)return;
                 var headline=notes[0].headline||'';
-                if(headline.toLowerCase().indexOf('tournament')===-1)return;
+                var hl=headline.toLowerCase();if(hl.indexOf('tournament')===-1&&hl.indexOf('championship')===-1)return;
 
                 var parts=headline.split(' - ');
                 var confName=parts[0].replace(' Tournament','').replace(/\s*(Championship|Championships)\s*/gi,'').trim();
