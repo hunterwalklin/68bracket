@@ -4736,22 +4736,16 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
 
         function renderEspnBracket(confGames,bracketDef,confSeeds){{
-            /* Build seed lookup by ESPN ID and team name */
-            var seedById={{}};
-            var seedByName={{}};
-            if(confSeeds)confSeeds.forEach(function(s){{
-                if(s.espn)seedById[String(s.espn)]=s.seed;
-                if(s.name)seedByName[s.name.toLowerCase()]=s.seed;
-            }});
-            /* Assign internal seeds to games when ESPN seed is missing */
-            confGames.forEach(function(g){{
-                if(!g.awaySeed){{
-                    g.awaySeed=seedById[g.awayId]||seedByName[(g.awayName||'').toLowerCase()]||0;
-                }}
-                if(!g.homeSeed){{
-                    g.homeSeed=seedById[g.homeId]||seedByName[(g.homeName||'').toLowerCase()]||0;
-                }}
-            }});
+            /* Infer seeds from bracket structure + ESPN game positions.
+               ESPN doesn't provide conf tourney seeds, so we match ESPN games
+               (by round/position) to bracket def slots to assign seed numbers.
+               Convention: ESPN home = higher seed (lower number). */
+            var seedMap={{}};
+            function assignSeed(id,name,seed){{
+                if(!seed||!name||name==='TBD')return;
+                if(id&&id!=='-1'&&id!=='-2')seedMap[id]=seed;
+                seedMap[name.toLowerCase()]=seed;
+            }}
             /* Group games by round, preserving first-seen order */
             var rnds=[];
             var rndMap={{}};
@@ -4762,6 +4756,35 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     rnds.push(key);
                 }}
                 rndMap[key].push(g);
+            }});
+
+            /* Match ESPN rounds to bracket def rounds by index (both chronological).
+               For each slot, assign seeds from the bracket def to ESPN teams. */
+            var defRounds=bracketDef.rounds;
+            var numMatch=Math.min(defRounds.length,rnds.length);
+            for(var mi=0;mi<numMatch;mi++){{
+                var defSlots=defRounds[mi].slots;
+                var espnGames=rndMap[rnds[mi]];
+                var ns=Math.min(defSlots.length,espnGames.length);
+                for(var si=0;si<ns;si++){{
+                    var sl=defSlots[si],gm=espnGames[si];
+                    var ts=sl.top.seed||0,bs=sl.bot.seed||0;
+                    if(ts&&bs){{
+                        /* Both seeded (e.g. R1): home=higher seed, away=lower seed */
+                        assignSeed(gm.homeId,gm.homeName,Math.min(ts,bs));
+                        assignSeed(gm.awayId,gm.awayName,Math.max(ts,bs));
+                    }}else if(ts){{
+                        /* Bye team (top has seed): home=bye=higher seed */
+                        assignSeed(gm.homeId,gm.homeName,ts);
+                    }}else if(bs){{
+                        assignSeed(gm.homeId,gm.homeName,bs);
+                    }}
+                }}
+            }}
+            /* Apply inferred seeds to all games */
+            confGames.forEach(function(g){{
+                if(!g.awaySeed)g.awaySeed=seedMap[g.awayId]||seedMap[(g.awayName||'').toLowerCase()]||0;
+                if(!g.homeSeed)g.homeSeed=seedMap[g.homeId]||seedMap[(g.homeName||'').toLowerCase()]||0;
             }});
 
             var html='<div class="ct-bracket-wrap"><div class="ct-bracket">';
