@@ -4735,7 +4735,23 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             return s;
         }}
 
-        function renderEspnBracket(confGames,bracketDef){{
+        function renderEspnBracket(confGames,bracketDef,confSeeds){{
+            /* Build seed lookup by ESPN ID and team name */
+            var seedById={{}};
+            var seedByName={{}};
+            if(confSeeds)confSeeds.forEach(function(s){{
+                if(s.espn)seedById[String(s.espn)]=s.seed;
+                if(s.name)seedByName[s.name.toLowerCase()]=s.seed;
+            }});
+            /* Assign internal seeds to games when ESPN seed is missing */
+            confGames.forEach(function(g){{
+                if(!g.awaySeed){{
+                    g.awaySeed=seedById[g.awayId]||seedByName[(g.awayName||'').toLowerCase()]||0;
+                }}
+                if(!g.homeSeed){{
+                    g.homeSeed=seedById[g.homeId]||seedByName[(g.homeName||'').toLowerCase()]||0;
+                }}
+            }});
             /* Group games by round, preserving first-seen order */
             var rnds=[];
             var rndMap={{}};
@@ -4828,7 +4844,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 gamesHtml=renderProjectedBracket(confName,qualSeeds,bracketDef);
             }}else if(confGames.length>0&&bracketDef){{
                 /* ESPN games + bracket definition: show bracket layout */
-                gamesHtml=renderEspnBracket(confGames,bracketDef);
+                gamesHtml=renderEspnBracket(confGames,bracketDef,confSeeds);
             }}else if(confGames.length>0){{
                 /* ESPN games but no bracket definition: flat list fallback */
                 var rounds=[];
