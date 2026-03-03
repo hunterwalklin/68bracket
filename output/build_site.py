@@ -4824,8 +4824,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
                 /* Sort: bye seeds ascending (ESPN lists bye games seed 1,2,3...) */
                 byeSeeds.sort(function(a,b){{return a-b;}});
-                /* Sort match pairs by home seed DESCENDING (ESPN lists 4v5 before 3v6 before 2v7 before 1v8) */
-                matchSeeds.sort(function(a,b){{return b.hi-a.hi;}});
+                /* Sort match pairs by hi ascending (best/lowest seed first) */
+                matchSeeds.sort(function(a,b){{return a.hi-b.hi;}});
 
                 /* Split ESPN games into TBD and known */
                 var tdbG=[],knownG=[];
@@ -4834,12 +4834,35 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     else knownG.push(g);
                 }});
 
-                /* Assign seeds: bye games get ascending bye seeds */
+                /* Sort known games by home team conf wins DESCENDING (most wins = best seed).
+                   This matches games to seed pairs regardless of ESPN game ordering,
+                   which varies across conferences (some ascending, some descending). */
+                knownG.sort(function(a,b){{
+                    var aw=a.homeConfRec?a.homeConfRec.w:0;
+                    var bw=b.homeConfRec?b.homeConfRec.w:0;
+                    if(bw!==aw)return bw-aw;
+                    /* Tiebreak: fewer losses first */
+                    var al=a.homeConfRec?a.homeConfRec.l:99;
+                    var bl=b.homeConfRec?b.homeConfRec.l:99;
+                    return al-bl;
+                }});
+
+                /* Sort TBD/bye games by home team conf wins DESCENDING too */
+                tdbG.sort(function(a,b){{
+                    var aw=a.homeConfRec?a.homeConfRec.w:0;
+                    var bw=b.homeConfRec?b.homeConfRec.w:0;
+                    if(bw!==aw)return bw-aw;
+                    var al=a.homeConfRec?a.homeConfRec.l:99;
+                    var bl=b.homeConfRec?b.homeConfRec.l:99;
+                    return al-bl;
+                }});
+
+                /* Assign seeds: bye games get ascending bye seeds (best record = best seed) */
                 var bi=0;
                 tdbG.forEach(function(g){{
                     if(bi<byeSeeds.length)assignSeed(g.homeId,g.homeName,byeSeeds[bi++]);
                 }});
-                /* Known games get match pair seeds (descending home seed order) */
+                /* Known games get match pair seeds: best record → best (lowest) seed */
                 var ki2=0;
                 knownG.forEach(function(g){{
                     if(ki2<matchSeeds.length){{
