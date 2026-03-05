@@ -57,10 +57,10 @@ jobs:
         run: python -m main build
 
       - name: Train models
-        run: python -m main train --model ensemble
+        run: python -m main train --model full_ensemble
 
       - name: Generate predictions and build site
-        run: python -m main predict --model ensemble
+        run: python -m main predict --model full_ensemble
 
       - name: Post to Bluesky
         env:
