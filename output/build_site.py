@@ -1052,6 +1052,11 @@ def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
             "Southern Mississippi", "James Madison", "Georgia Southern",
             "Old Dominion", "Louisiana", "Georgia State", "Louisiana-Monroe",
         ],
+        "SWAC": [
+            "Bethune-Cookman", "Florida A&M", "Southern", "Texas Southern",
+            "Alabama A&M", "Arkansas-Pine Bluff", "Jackson State", "Prairie View",
+            "Grambling", "Alabama State", "Alcorn State", "Mississippi Valley State",
+        ],
         "WCC": [
             "Gonzaga", "Saint Mary's (CA)", "Santa Clara", "Oregon State",
             "San Francisco", "Pacific", "Seattle", "Washington State",
@@ -5170,14 +5175,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     }}
                     if(sl.top.ref&&(g.homeName==='TBD'||g.awayName==='TBD')){{
                         var w=resolveRef(sl.top.ref);
-                        if(w){{
+                        if(w&&w.name!==g.homeName&&w.name!==g.awayName){{
                             if(g.awayName==='TBD'){{g.awayName=w.name;g.awayId=w.id;g.awayTeam=w.team;}}
                             else if(g.homeName==='TBD'){{g.homeName=w.name;g.homeId=w.id;g.homeTeam=w.team;}}
                         }}
                     }}
                     if(sl.bot.ref&&(g.homeName==='TBD'||g.awayName==='TBD')){{
                         var w2=resolveRef(sl.bot.ref);
-                        if(w2){{
+                        if(w2&&w2.name!==g.homeName&&w2.name!==g.awayName){{
                             if(g.awayName==='TBD'){{g.awayName=w2.name;g.awayId=w2.id;g.awayTeam=w2.team;}}
                             else if(g.homeName==='TBD'){{g.homeName=w2.name;g.homeId=w2.id;g.homeTeam=w2.team;}}
                         }}
