@@ -1435,13 +1435,13 @@
     ]
   },
   "CUSA": {
-    "teams": 12,
+    "teams": 10,
     "rounds": [
       {
         "name": "First Round",
         "slots": [
           {
-            "id": "R1G2",
+            "id": "R1G1",
             "top": {
               "seed": 8
             },
@@ -1450,30 +1450,12 @@
             }
           },
           {
-            "id": "R1G1",
-            "top": {
-              "seed": 5
-            },
-            "bot": {
-              "seed": 12
-            }
-          },
-          {
-            "id": "R1G4",
+            "id": "R1G2",
             "top": {
               "seed": 7
             },
             "bot": {
               "seed": 10
-            }
-          },
-          {
-            "id": "R1G3",
-            "top": {
-              "seed": 6
-            },
-            "bot": {
-              "seed": 11
             }
           }
         ]
@@ -1487,7 +1469,7 @@
               "seed": 1
             },
             "bot": {
-              "ref": "R1G2"
+              "ref": "R1G1"
             }
           },
           {
@@ -1496,7 +1478,7 @@
               "seed": 4
             },
             "bot": {
-              "ref": "R1G1"
+              "seed": 5
             }
           },
           {
@@ -1505,7 +1487,7 @@
               "seed": 2
             },
             "bot": {
-              "ref": "R1G4"
+              "ref": "R1G2"
             }
           },
           {
@@ -1514,7 +1496,7 @@
               "seed": 3
             },
             "bot": {
-              "ref": "R1G3"
+              "seed": 6
             }
           }
         ]

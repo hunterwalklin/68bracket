@@ -986,6 +986,43 @@ def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
     # ESPN standings API uses different tiebreakers than conferences, so tied
     # teams often end up in the wrong order.  These overrides fix that.
     _seed_overrides = {
+        "A-10": [
+            "Saint Louis", "Virginia Commonwealth", "Saint Joseph's", "Dayton",
+            "George Mason", "Davidson", "Duquesne", "Fordham",
+            "George Washington", "Rhode Island", "Richmond", "La Salle",
+            "St. Bonaventure", "Loyola (IL)",
+        ],
+        "Big 12": [
+            "Arizona", "Houston", "Kansas", "Texas Tech",
+            "Iowa State", "TCU", "West Virginia", "UCF",
+            "Cincinnati", "Brigham Young", "Colorado", "Arizona State",
+            "Baylor", "Oklahoma State", "Kansas State", "Utah",
+        ],
+        "SEC": [
+            "Florida", "Alabama", "Arkansas", "Vanderbilt",
+            "Tennessee", "Texas A&M", "Georgia", "Missouri",
+            "Kentucky", "Texas", "Oklahoma", "Auburn",
+            "Mississippi State", "South Carolina", "Mississippi",
+            "Louisiana State",
+        ],
+        "CUSA": [
+            "Liberty", "Sam Houston", "Western Kentucky", "Louisiana Tech",
+            "Middle Tennessee", "Kennesaw State", "Jacksonville State",
+            "Florida International", "Missouri State", "New Mexico State",
+            "UTEP", "Delaware",
+        ],
+        "Big West": [
+            "UC Irvine", "Hawaii", "Cal State Fullerton", "Cal State Northridge",
+            "UC San Diego", "UC Davis", "UC Santa Barbara", "Cal Poly",
+            "Long Beach State", "UC Riverside", "Cal State Bakersfield",
+        ],
+        "Big Ten": [
+            "Michigan", "Nebraska", "Michigan State", "Illinois",
+            "Wisconsin", "UCLA", "Purdue", "Ohio State",
+            "Iowa", "Indiana", "Minnesota", "Washington",
+            "Southern California", "Rutgers", "Northwestern", "Oregon",
+            "Maryland", "Penn State",
+        ],
         "A-Sun": [
             "Central Arkansas", "Austin Peay", "Queens (NC)", "Lipscomb",
             "Florida Gulf Coast", "West Georgia", "Eastern Kentucky", "Bellarmine",
@@ -4492,10 +4529,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var notes=ev.competitions&&ev.competitions[0]&&ev.competitions[0].notes;
                 if(!notes||!notes.length)return;
                 var headline=notes[0].headline||'';
-                var hl=headline.toLowerCase();if(hl.indexOf('tournament')===-1&&hl.indexOf('championship')===-1)return;
+                var hl=headline.toLowerCase();if(hl.indexOf('tournament')===-1&&hl.indexOf('championship')===-1&&hl.indexOf('playoff')===-1)return;
 
                 var parts=headline.split(' - ');
-                var confName=parts[0].replace(' Tournament','').replace(/\s*(Championship|Championships)\s*/gi,'').trim();
+                var confName=parts[0].replace(' Tournament','').replace(' Playoffs','').replace(/\s*(Championship|Championships)\s*/gi,'').trim();
                 /* Strip sponsor branding: "T. Rowe Price ACC" -> "ACC", "Ivy League pres. by TIAA" -> "Ivy League" */
                 confName=confName.replace(/\s+pres\.?\s+by\s+.+$/i,'').trim();
                 /* Normalize ESPN conference names to internal keys */
@@ -5288,14 +5325,15 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             var hasLive=confGames.some(function(g){{return g.state==='in';}});
             var hasPre=confGames.some(function(g){{return g.state==='pre';}});
             var allPost=confGames.length>0&&confGames.every(function(g){{return g.state==='post';}});
+            var hasPost=confGames.some(function(g){{return g.state==='post';}});
             var badge='';
             if(hasLive)badge='<span class="ct-badge ct-badge-live">Live</span>';
             else if(allPost)badge='<span class="ct-badge ct-badge-complete">Complete</span>';
             else if(confGames.length>0&&!hasPre)badge='<span class="ct-badge ct-badge-complete">Complete</span>';
+            else if(hasPost&&hasPre)badge='<span class="ct-badge ct-badge-live">In Progress</span>';
             else badge='<span class="ct-badge ct-badge-upcoming">Upcoming</span>';
 
-            var openAttr=hasLive?' open':'';
-            if(confGames.length===0)openAttr='';
+            var openAttr='';
 
             var logo=confLogo(confName);
 
