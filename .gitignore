@@ -7,3 +7,5 @@ output/*.md
 _site/
 logs/
 .DS_Store
+catboost_info/
+data/brackets/
