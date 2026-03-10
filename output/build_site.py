@@ -34,6 +34,365 @@ if os.path.exists(_brackets_path):
         _CONF_BRACKETS = json.load(_f)
 
 
+# Tiebreaker overrides from actual conference tournament brackets (2026).
+# ESPN standings API uses different tiebreakers than conferences, so tied
+# teams often end up in the wrong order.  These overrides fix that.
+_CONF_SEED_OVERRIDES = {
+    "A-10": [
+        "Saint Louis", "Virginia Commonwealth", "Saint Joseph's", "Dayton",
+        "George Mason", "Davidson", "Duquesne", "Fordham",
+        "George Washington", "Rhode Island", "Richmond", "La Salle",
+        "St. Bonaventure", "Loyola (IL)",
+    ],
+    "Big 12": [
+        "Arizona", "Houston", "Kansas", "Texas Tech",
+        "Iowa State", "TCU", "West Virginia", "UCF",
+        "Cincinnati", "Brigham Young", "Colorado", "Arizona State",
+        "Baylor", "Oklahoma State", "Kansas State", "Utah",
+    ],
+    "SEC": [
+        "Florida", "Alabama", "Arkansas", "Vanderbilt",
+        "Tennessee", "Texas A&M", "Georgia", "Missouri",
+        "Kentucky", "Texas", "Oklahoma", "Auburn",
+        "Mississippi State", "South Carolina", "Mississippi",
+        "Louisiana State",
+    ],
+    "CUSA": [
+        "Liberty", "Sam Houston", "Western Kentucky", "Louisiana Tech",
+        "Middle Tennessee", "Kennesaw State", "Jacksonville State",
+        "Florida International", "Missouri State", "New Mexico State",
+        "UTEP", "Delaware",
+    ],
+    "Big West": [
+        "UC Irvine", "Hawaii", "Cal State Fullerton", "Cal State Northridge",
+        "UC San Diego", "UC Davis", "UC Santa Barbara", "Cal Poly",
+        "Long Beach State", "UC Riverside", "Cal State Bakersfield",
+    ],
+    "Big Ten": [
+        "Michigan", "Nebraska", "Michigan State", "Illinois",
+        "Wisconsin", "UCLA", "Purdue", "Ohio State",
+        "Iowa", "Indiana", "Minnesota", "Washington",
+        "Southern California", "Rutgers", "Northwestern", "Oregon",
+        "Maryland", "Penn State",
+    ],
+    "A-Sun": [
+        "Central Arkansas", "Austin Peay", "Queens (NC)", "Lipscomb",
+        "Florida Gulf Coast", "West Georgia", "Eastern Kentucky", "Bellarmine",
+        "Jacksonville", "Stetson", "North Florida", "North Alabama",
+    ],
+    "Big Sky": [
+        "Portland State", "Montana State", "Eastern Washington", "Montana",
+        "Northern Colorado", "Weber State", "Idaho", "Sacramento State",
+        "Idaho State", "Northern Arizona",
+    ],
+    "CAA": [
+        "UNC Wilmington", "College of Charleston", "Hofstra", "Monmouth",
+        "Drexel", "William & Mary", "Towson", "Stony Brook", "Campbell",
+        "Hampton", "Elon", "North Carolina A&T", "Northeastern",
+    ],
+    "Ivy": [
+        "Yale", "Harvard", "Pennsylvania", "Cornell", "Princeton",
+        "Dartmouth", "Columbia", "Brown",
+    ],
+    "Horizon": [
+        "Wright State", "Robert Morris", "Detroit Mercy", "Oakland",
+        "Green Bay", "Purdue Fort Wayne", "Northern Kentucky", "Milwaukee",
+        "Youngstown State", "Cleveland State", "IU Indy",
+    ],
+    "MVC": [
+        "Belmont", "Bradley", "Illinois State", "Murray State",
+        "Illinois-Chicago", "Northern Iowa", "Valparaiso", "Southern Illinois",
+        "Drake", "Indiana State", "Evansville",
+    ],
+    "NEC": [
+        "Long Island University", "Central Connecticut State", "Mercyhurst",
+        "Le Moyne", "Stonehill", "FDU", "Wagner", "Chicago State",
+        "Saint Francis (PA)",
+    ],
+    "OVC": [
+        "Tennessee State", "Morehead State", "Southeast Missouri State",
+        "Tennessee-Martin", "SIU Edwardsville", "Lindenwood", "Little Rock",
+        "Eastern Illinois", "Tennessee Tech", "Southern Indiana",
+        "Western Illinois",
+    ],
+    "Patriot": [
+        "Navy", "Lehigh", "Colgate", "Boston University", "American",
+        "Loyola (MD)", "Lafayette", "Bucknell", "Army", "Holy Cross",
+    ],
+    "Southern": [
+        "East Tennessee State", "Wofford", "Samford", "Mercer",
+        "Western Carolina", "Furman", "UNC Greensboro", "Chattanooga",
+        "The Citadel", "VMI",
+    ],
+    "Southland": [
+        "Stephen F. Austin", "McNeese State", "Texas-Rio Grande Valley",
+        "Texas A&M-Corpus Christi", "New Orleans", "Nicholls State",
+        "Northwestern State", "Houston Christian", "Lamar",
+        "Incarnate Word", "Southeastern Louisiana", "East Texas A&M",
+    ],
+    "Summit": [
+        "North Dakota State", "St. Thomas", "North Dakota", "South Dakota",
+        "Omaha", "Denver", "South Dakota State", "Oral Roberts",
+        "Kansas City",
+    ],
+    "Sun Belt": [
+        "Troy", "Marshall", "Coastal Carolina", "Appalachian State",
+        "Texas State", "South Alabama", "Arkansas State",
+        "Southern Mississippi", "James Madison", "Georgia Southern",
+        "Old Dominion", "Louisiana", "Georgia State", "Louisiana-Monroe",
+    ],
+    "SWAC": [
+        "Bethune-Cookman", "Florida A&M", "Southern", "Texas Southern",
+        "Alabama A&M", "Arkansas-Pine Bluff", "Jackson State", "Prairie View",
+        "Grambling", "Alabama State", "Alcorn State", "Mississippi Valley State",
+    ],
+    "WCC": [
+        "Gonzaga", "Saint Mary's (CA)", "Santa Clara", "Oregon State",
+        "San Francisco", "Pacific", "Seattle", "Washington State",
+        "Portland", "Loyola Marymount", "San Diego", "Pepperdine",
+    ],
+}
+
+
+def _fetch_conf_tourney_eliminated() -> tuple[dict[str, str], dict[str, set[str]]]:
+    """Fetch ESPN conference tournament results to find eliminated teams and actual winners.
+
+    Returns:
+        (actual_winners, eliminated) where:
+        - actual_winners: conf_name -> winning team display name (only for completed tournaments)
+        - eliminated: conf_name -> set of eliminated team display names
+    """
+    import urllib.request
+
+    ESPN_API = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
+    espn_conf_aliases = {
+        "Atlantic Coast Conference": "ACC", "Southeastern Conference": "SEC",
+        "Atlantic 10": "A-10", "Mid-American": "MAC", "Mountain West": "MWC",
+        "Missouri Valley": "MVC", "Ohio Valley": "OVC", "West Coast": "WCC",
+        "Metro Atlantic Athletic": "MAAC", "Northeast": "NEC",
+        "Horizon League": "Horizon", "Conference USA": "CUSA",
+        "Coastal Athletic Association": "CAA", "Colonial Athletic Association": "CAA",
+        "America East": "AmEast", "Atlantic Sun": "A-Sun",
+        "Big South-OVC": "Big South",
+        "Northeast Conference": "NEC", "West Coast Conference": "WCC",
+        "Ivy League": "Ivy", "Patriot League": "Patriot",
+        "Summit League": "Summit", "Southland Conference": "Southland",
+        "Southern Conference": "Southern", "ASUN": "A-Sun", "SoCon": "Southern",
+    }
+
+    eliminated: dict[str, set[str]] = {}
+    actual_winners: dict[str, str] = {}
+    conf_games: dict[str, list] = {}
+
+    try:
+        # Fetch March 1-16 for conference tournament games
+        for day in range(1, 17):
+            date_str = f"{PREDICTION_SEASON}03{day:02d}"
+            url = f"{ESPN_API}?dates={date_str}&limit=200&groups=50"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode())
+            except Exception:
+                continue
+
+            for ev in data.get("events", []):
+                comp = ev.get("competitions", [{}])[0]
+                notes = comp.get("notes", [])
+                if not notes:
+                    continue
+                headline = notes[0].get("headline", "")
+                hl = headline.lower()
+                if "tournament" not in hl and "championship" not in hl and "playoff" not in hl:
+                    continue
+
+                parts = headline.split(" - ")
+                conf_name = parts[0].replace(" Tournament", "").replace(" Playoffs", "")
+                conf_name = re.sub(r"\s*(Championship|Championships)\s*", "", conf_name).strip()
+                conf_name = re.sub(r"\s+pres\.?\s+by\s+.+$", "", conf_name, flags=re.IGNORECASE).strip()
+                # Strip sponsor branding
+                for alias, internal in espn_conf_aliases.items():
+                    if conf_name == alias or alias in conf_name:
+                        conf_name = internal
+                        break
+                # Also try direct key match from known bracket keys
+                if conf_name not in _CONF_BRACKETS:
+                    for key in _CONF_BRACKETS:
+                        if key in conf_name or conf_name in key:
+                            conf_name = key
+                            break
+
+                status = comp.get("status", {}).get("type", {})
+                state = status.get("state", "pre")
+                if state != "post":
+                    continue
+
+                competitors = comp.get("competitors", [])
+                away = home = None
+                for c in competitors:
+                    if c.get("homeAway") == "away":
+                        away = c
+                    else:
+                        home = c
+                if not away or not home:
+                    continue
+
+                away_team = away.get("team", {})
+                home_team = home.get("team", {})
+                away_name = away_team.get("shortDisplayName", "") or away_team.get("displayName", "")
+                home_name = home_team.get("shortDisplayName", "") or home_team.get("displayName", "")
+                away_score = int(away.get("score", 0) or 0)
+                home_score = int(home.get("score", 0) or 0)
+
+                if conf_name not in eliminated:
+                    eliminated[conf_name] = set()
+                if conf_name not in conf_games:
+                    conf_games[conf_name] = []
+                conf_games[conf_name].append(headline)
+
+                # Loser is eliminated
+                if home_score > away_score:
+                    eliminated[conf_name].add(away_name)
+                elif away_score > home_score:
+                    eliminated[conf_name].add(home_name)
+
+                # Check if this is the championship game
+                round_name = parts[1].strip() if len(parts) > 1 else ""
+                round_lower = round_name.lower()
+                if "final" in round_lower or "championship" in round_lower:
+                    winner_name = home_name if home_score > away_score else away_name
+                    actual_winners[conf_name] = winner_name
+
+    except Exception:
+        pass
+
+    return actual_winners, eliminated
+
+
+def simulate_conf_tourney(conf_seeds: list[dict], bracket_def: dict) -> dict | None:
+    """Simulate a conference tournament bracket and return the projected winner.
+
+    conf_seeds: list of dicts with keys: name, seed, adj_oe, adj_de, pace
+    bracket_def: bracket structure from conf_tourney_brackets.json
+    Returns the winning team dict, or None if simulation fails.
+    """
+    if not bracket_def or not conf_seeds:
+        return None
+
+    seed_map = {t["seed"]: t for t in conf_seeds}
+
+    AVG_EFF = 97.5
+    AVG_TEMPO = 67.5
+
+    def _predict_spread(a, b):
+        oe_a = a.get("adj_oe", AVG_EFF)
+        de_a = a.get("adj_de", AVG_EFF)
+        oe_b = b.get("adj_oe", AVG_EFF)
+        de_b = b.get("adj_de", AVG_EFF)
+        pace_a = a.get("pace", AVG_TEMPO)
+        pace_b = b.get("pace", AVG_TEMPO)
+        expected_poss = (pace_a * pace_b) / AVG_TEMPO
+        raw_a = (oe_a + de_b - AVG_EFF) * expected_poss / 100
+        raw_b = (oe_b + de_a - AVG_EFF) * expected_poss / 100
+        return raw_a - raw_b  # positive = team a favored
+
+    def _resolve(entry, slot_winners):
+        if "seed" in entry:
+            return seed_map.get(entry["seed"])
+        if "ref" in entry:
+            return slot_winners.get(entry["ref"])
+        return None
+
+    slot_winners = {}
+    for rnd in bracket_def["rounds"]:
+        for slot in rnd["slots"]:
+            top = _resolve(slot["top"], slot_winners)
+            bot = _resolve(slot["bot"], slot_winners)
+            if top and bot:
+                spread = _predict_spread(top, bot)
+                winner = top if spread >= 0 else bot
+            elif top:
+                winner = top
+            elif bot:
+                winner = bot
+            else:
+                winner = None
+            slot_winners[slot["id"]] = winner
+
+    last_slot = bracket_def["rounds"][-1]["slots"][0]
+    return slot_winners.get(last_slot["id"])
+
+
+def project_conf_tourney_winners(stats_df: pd.DataFrame, seed_overrides: dict | None = None) -> dict:
+    """Project conference tournament winners for all conferences.
+
+    Accounts for actual tournament results:
+    - Completed tournaments use the actual winner.
+    - In-progress tournaments exclude eliminated teams before simulating.
+
+    Returns dict mapping conference name -> team name of projected winner.
+    """
+    if stats_df is None:
+        return {}
+
+    # Fetch actual results from ESPN
+    actual_winners, eliminated = _fetch_conf_tourney_eliminated()
+
+    df = stats_df[stats_df["net_ranking"] > 0].copy()
+    winners = {}
+
+    for conf, grp in df.groupby("conference"):
+        # If tournament is already complete, use actual winner
+        if conf in actual_winners:
+            winners[conf] = actual_winners[conf]
+            print(f"  {conf}: actual winner = {actual_winners[conf]}")
+            continue
+
+        bracket_def = _CONF_BRACKETS.get(conf)
+        if not bracket_def:
+            best = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True]).iloc[0]
+            winners[conf] = str(best["team"])
+            continue
+
+        # Build seeds (same logic as _build_conf_tourney_tab)
+        grp_sorted = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True]).reset_index(drop=True)
+
+        # Apply seed overrides if provided
+        if seed_overrides and conf in seed_overrides:
+            opos = {name: idx for idx, name in enumerate(seed_overrides[conf])}
+            grp_sorted = grp_sorted.copy()
+            grp_sorted["_override"] = grp_sorted["team"].map(lambda t: opos.get(t, 9999))
+            grp_sorted = grp_sorted.sort_values("_override").reset_index(drop=True)
+            grp_sorted = grp_sorted.drop(columns=["_override"])
+
+        n_teams = bracket_def.get("teams", len(grp_sorted))
+
+        # Filter out eliminated teams before building seeds
+        conf_eliminated = eliminated.get(conf, set())
+        if conf_eliminated:
+            grp_sorted = grp_sorted[~grp_sorted["team"].isin(conf_eliminated)].reset_index(drop=True)
+            print(f"  {conf}: excluded eliminated teams: {conf_eliminated}")
+
+        conf_seeds = []
+        for i, (_, r) in enumerate(grp_sorted.head(n_teams).iterrows()):
+            conf_seeds.append({
+                "name": str(r["team"]),
+                "seed": i + 1,
+                "adj_oe": float(r.get("adj_oe", 97.5)) if pd.notna(r.get("adj_oe")) else 97.5,
+                "adj_de": float(r.get("adj_de", 97.5)) if pd.notna(r.get("adj_de")) else 97.5,
+                "pace": float(r.get("pace", 67.5)) if pd.notna(r.get("pace")) else 67.5,
+            })
+
+        winner = simulate_conf_tourney(conf_seeds, bracket_def)
+        if winner:
+            winners[conf] = winner["name"]
+        else:
+            best = grp_sorted.iloc[0]
+            winners[conf] = str(best["team"])
+
+    return winners
+
+
 def _team_logo(school_id: str) -> str:
     """Return an <img> tag for a team's ESPN logo, or empty string if unknown."""
     espn_id = _ESPN_LOGOS.get(school_id)
@@ -298,18 +657,30 @@ def _build_standings_tab(stats_df) -> str:
     return html
 
 
-def _build_autobid_tab(stats_df) -> str:
+def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
     """Generate an HTML table showing projected conference auto-bid winners."""
     if stats_df is None:
         return '<p style="color: var(--text-muted);">Auto-bid data not available. Run the predict command to generate.</p>'
 
     df = stats_df[stats_df["net_ranking"] > 0].copy()
+
+    # Project conference tournament winners using bracket simulation
+    projected_winners = project_conf_tourney_winners(stats_df, seed_overrides=seed_overrides)
+
     conferences = []
     for conf, grp in df.groupby("conference"):
-        # Projected winner: best conf_win_pct, tiebreak by lowest net_ranking
         grp_sorted = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True])
-        winner = grp_sorted.iloc[0]
-        runner_up = grp_sorted.iloc[1] if len(grp_sorted) > 1 else None
+
+        # Use bracket simulation winner if available
+        proj_winner_name = projected_winners.get(conf)
+        if proj_winner_name and proj_winner_name in grp_sorted["team"].values:
+            winner = grp_sorted[grp_sorted["team"] == proj_winner_name].iloc[0]
+        else:
+            winner = grp_sorted.iloc[0]
+
+        # Runner-up: next best team that isn't the winner
+        remaining = grp_sorted[grp_sorted["team"] != str(winner["team"])]
+        runner_up = remaining.iloc[0] if len(remaining) > 0 else None
 
         prob = float(winner["selection_prob"]) if pd.notna(winner.get("selection_prob")) else 0.0
         at_large = int((grp[grp["team"] != winner["team"]]["selection_prob"] > 0.5).sum())
@@ -982,124 +1353,7 @@ def _build_conf_tourney_tab(stats_df: pd.DataFrame) -> str:
     # Fetch ESPN standings for correct tiebreaker ordering
     espn_standings = _fetch_espn_standings()
 
-    # Tiebreaker overrides from actual conference tournament brackets (2026).
-    # ESPN standings API uses different tiebreakers than conferences, so tied
-    # teams often end up in the wrong order.  These overrides fix that.
-    _seed_overrides = {
-        "A-10": [
-            "Saint Louis", "Virginia Commonwealth", "Saint Joseph's", "Dayton",
-            "George Mason", "Davidson", "Duquesne", "Fordham",
-            "George Washington", "Rhode Island", "Richmond", "La Salle",
-            "St. Bonaventure", "Loyola (IL)",
-        ],
-        "Big 12": [
-            "Arizona", "Houston", "Kansas", "Texas Tech",
-            "Iowa State", "TCU", "West Virginia", "UCF",
-            "Cincinnati", "Brigham Young", "Colorado", "Arizona State",
-            "Baylor", "Oklahoma State", "Kansas State", "Utah",
-        ],
-        "SEC": [
-            "Florida", "Alabama", "Arkansas", "Vanderbilt",
-            "Tennessee", "Texas A&M", "Georgia", "Missouri",
-            "Kentucky", "Texas", "Oklahoma", "Auburn",
-            "Mississippi State", "South Carolina", "Mississippi",
-            "Louisiana State",
-        ],
-        "CUSA": [
-            "Liberty", "Sam Houston", "Western Kentucky", "Louisiana Tech",
-            "Middle Tennessee", "Kennesaw State", "Jacksonville State",
-            "Florida International", "Missouri State", "New Mexico State",
-            "UTEP", "Delaware",
-        ],
-        "Big West": [
-            "UC Irvine", "Hawaii", "Cal State Fullerton", "Cal State Northridge",
-            "UC San Diego", "UC Davis", "UC Santa Barbara", "Cal Poly",
-            "Long Beach State", "UC Riverside", "Cal State Bakersfield",
-        ],
-        "Big Ten": [
-            "Michigan", "Nebraska", "Michigan State", "Illinois",
-            "Wisconsin", "UCLA", "Purdue", "Ohio State",
-            "Iowa", "Indiana", "Minnesota", "Washington",
-            "Southern California", "Rutgers", "Northwestern", "Oregon",
-            "Maryland", "Penn State",
-        ],
-        "A-Sun": [
-            "Central Arkansas", "Austin Peay", "Queens (NC)", "Lipscomb",
-            "Florida Gulf Coast", "West Georgia", "Eastern Kentucky", "Bellarmine",
-            "Jacksonville", "Stetson", "North Florida", "North Alabama",
-        ],
-        "Big Sky": [
-            "Portland State", "Montana State", "Eastern Washington", "Montana",
-            "Northern Colorado", "Weber State", "Idaho", "Sacramento State",
-            "Idaho State", "Northern Arizona",
-        ],
-        "CAA": [
-            "UNC Wilmington", "College of Charleston", "Hofstra", "Monmouth",
-            "Drexel", "William & Mary", "Towson", "Stony Brook", "Campbell",
-            "Hampton", "Elon", "North Carolina A&T", "Northeastern",
-        ],
-        "Ivy": [
-            "Yale", "Harvard", "Pennsylvania", "Cornell", "Princeton",
-            "Dartmouth", "Columbia", "Brown",
-        ],
-        "Horizon": [
-            "Wright State", "Robert Morris", "Detroit Mercy", "Oakland",
-            "Green Bay", "Purdue Fort Wayne", "Northern Kentucky", "Milwaukee",
-            "Youngstown State", "Cleveland State", "IU Indy",
-        ],
-        "MVC": [
-            "Belmont", "Bradley", "Illinois State", "Murray State",
-            "Illinois-Chicago", "Northern Iowa", "Valparaiso", "Southern Illinois",
-            "Drake", "Indiana State", "Evansville",
-        ],
-        "NEC": [
-            "Long Island University", "Central Connecticut State", "Mercyhurst",
-            "Le Moyne", "Stonehill", "FDU", "Wagner", "Chicago State",
-            "Saint Francis (PA)",
-        ],
-        "OVC": [
-            "Tennessee State", "Morehead State", "Southeast Missouri State",
-            "Tennessee-Martin", "SIU Edwardsville", "Lindenwood", "Little Rock",
-            "Eastern Illinois", "Tennessee Tech", "Southern Indiana",
-            "Western Illinois",
-        ],
-        "Patriot": [
-            "Navy", "Lehigh", "Colgate", "Boston University", "American",
-            "Loyola (MD)", "Lafayette", "Bucknell", "Army", "Holy Cross",
-        ],
-        "Southern": [
-            "East Tennessee State", "Wofford", "Samford", "Mercer",
-            "Western Carolina", "Furman", "UNC Greensboro", "Chattanooga",
-            "The Citadel", "VMI",
-        ],
-        "Southland": [
-            "Stephen F. Austin", "McNeese State", "Texas-Rio Grande Valley",
-            "Texas A&M-Corpus Christi", "New Orleans", "Nicholls State",
-            "Northwestern State", "Houston Christian", "Lamar",
-            "Incarnate Word", "Southeastern Louisiana", "East Texas A&M",
-        ],
-        "Summit": [
-            "North Dakota State", "St. Thomas", "North Dakota", "South Dakota",
-            "Omaha", "Denver", "South Dakota State", "Oral Roberts",
-            "Kansas City",
-        ],
-        "Sun Belt": [
-            "Troy", "Marshall", "Coastal Carolina", "Appalachian State",
-            "Texas State", "South Alabama", "Arkansas State",
-            "Southern Mississippi", "James Madison", "Georgia Southern",
-            "Old Dominion", "Louisiana", "Georgia State", "Louisiana-Monroe",
-        ],
-        "SWAC": [
-            "Bethune-Cookman", "Florida A&M", "Southern", "Texas Southern",
-            "Alabama A&M", "Arkansas-Pine Bluff", "Jackson State", "Prairie View",
-            "Grambling", "Alabama State", "Alcorn State", "Mississippi Valley State",
-        ],
-        "WCC": [
-            "Gonzaga", "Saint Mary's (CA)", "Santa Clara", "Oregon State",
-            "San Francisco", "Pacific", "Seattle", "Washington State",
-            "Portland", "Loyola Marymount", "San Diego", "Pepperdine",
-        ],
-    }
+    _seed_overrides = _CONF_SEED_OVERRIDES
 
     # Build projected tournament seeds per conference
     seeds_data = {}
@@ -6823,7 +7077,7 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
         stats_html = _build_stats_table(stats_df)
         conf_tab_html = _build_conf_tab(stats_df)
         standings_tab_html = _build_standings_tab(stats_df)
-        autobid_tab_html = _build_autobid_tab(stats_df)
+        autobid_tab_html = _build_autobid_tab(stats_df, seed_overrides=_CONF_SEED_OVERRIDES)
 
     # Compute last_4_byes if missing (older bubble.json files lack this field)
     if bubble and "last_4_byes" not in bubble and stats_df is not None:

@@ -267,6 +267,18 @@ def cmd_predict(args):
     seed_model = get_seeding_model(model_type)
     seed_model.load()
 
+    # Project conference tournament winners using bracket simulation
+    from output.build_site import project_conf_tourney_winners, _CONF_SEED_OVERRIDES
+    print("\nProjecting conference tournament winners...")
+    conf_winners = project_conf_tourney_winners(pred_df, seed_overrides=_CONF_SEED_OVERRIDES)
+    pred_df = pred_df.copy()
+    pred_df["conf_tourney_winner"] = 0
+    for conf, winner_name in conf_winners.items():
+        mask = (pred_df["conference"] == conf) & (pred_df["team"] == winner_name)
+        pred_df.loc[mask, "conf_tourney_winner"] = 1
+    n_winners = int(pred_df["conf_tourney_winner"].sum())
+    print(f"  Projected {n_winners} conference tournament winners")
+
     # Stage 1: Select 68 teams
     print("\nStage 1: Selecting tournament field...")
     field = sel_model.select_field(pred_df)
