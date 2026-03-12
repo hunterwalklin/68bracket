@@ -4646,8 +4646,26 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         function refreshLive(){{
             if(!currentDate)return;
             var dateStr=currentDate;
+            var scrollY=window.pageYOffset||document.documentElement.scrollTop;
             delete cache[dateStr];
-            loadDate(dateStr);
+            fetch(API+'?dates='+dateStr+'&limit=200&groups=50')
+                .then(function(r){{return r.json();}})
+                .then(function(data){{
+                    cache[dateStr]=data;
+                    if(currentDate===dateStr){{
+                        var navHtml='<div class="sched-nav">'
+                            +'<button id="sched-prev">&larr; Prev</button>'
+                            +'<button id="sched-today">Today</button>'
+                            +'<div class="sched-date">'+displayDate(new Date(dateStr.slice(0,4)+'-'+dateStr.slice(4,6)+'-'+dateStr.slice(6,8)+'T12:00:00'))+'</div>'
+                            +'<button id="sched-next">Next &rarr;</button>'
+                            +buildFilterSelect()
+                            +'</div>';
+                        app.innerHTML=navHtml+renderGames(data);
+                        bindNav();
+                        window.scrollTo(0,scrollY);
+                        startAutoRefresh();
+                    }}
+                }});
         }}
 
         function startAutoRefresh(){{

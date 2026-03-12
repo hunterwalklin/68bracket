@@ -240,9 +240,12 @@ def generate_markdown(
     bubble: dict | None = None,
 ) -> str:
     """Generate a markdown representation of the bracket."""
-    from datetime import datetime, timezone, timedelta
-    cst = timezone(timedelta(hours=-6))
-    timestamp = datetime.now(cst).strftime("%B %d, %Y at %I:%M %p CST")
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    central = ZoneInfo("America/Chicago")
+    now = datetime.now(central)
+    tz_label = now.strftime("%Z")  # CST or CDT
+    timestamp = now.strftime(f"%B %d, %Y at %I:%M %p {tz_label}")
     lines = [
         f"# NCAA Tournament Predictions - {season-1}-{str(season)[2:]}",
         "",
