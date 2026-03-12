@@ -2997,6 +2997,32 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             border-color: var(--accent);
             outline: none;
         }}
+        .sched-sort-bar {{
+            display: flex;
+            justify-content: center;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }}
+        .sched-sort-btn {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }}
+        .sched-sort-btn:hover {{
+            border-color: var(--accent);
+            color: var(--accent);
+        }}
+        .sched-sort-btn.active {{
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }}
         .sched-summary {{
             text-align: center;
             color: var(--text-muted);
@@ -4344,6 +4370,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         var loaded=false;
         var currentDate=null;
         var currentFilter='all';
+        var currentSort='watchability';
         var POWER_CONFS=['ACC','Big 12','Big East','Big Ten','SEC'];
 
         /* Build ESPN ID lookup + conference list */
@@ -4425,6 +4452,46 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             return s;
         }}
 
+        function buildSortBar(){{
+            var sorts=[['time','Time'],['watchability','Watchability'],['spread','Spread'],['ranking','Ranking']];
+            var s='<div class="sched-sort-bar">';
+            sorts.forEach(function(p){{
+                s+='<button class="sched-sort-btn'+(currentSort===p[0]?' active':'')+'" data-sort="'+p[0]+'">'+p[1]+'</button>';
+            }});
+            s+='</div>';
+            return s;
+        }}
+
+        function sortGames(games){{
+            /* Live games always float to top */
+            var live=games.filter(function(g){{return g.state==='in';}});
+            var rest=games.filter(function(g){{return g.state!=='in';}});
+            if(currentSort==='time'){{
+                rest.sort(function(a,b){{return (a.startDate||'').localeCompare(b.startDate||'');}});
+            }}else if(currentSort==='watchability'){{
+                rest.sort(function(a,b){{
+                    var aw=a.pred?a.pred.watch:0,bw=b.pred?b.pred.watch:0;
+                    if(aw!==bw)return bw-aw;
+                    return (a.startDate||'').localeCompare(b.startDate||'');
+                }});
+            }}else if(currentSort==='spread'){{
+                rest.sort(function(a,b){{
+                    var as=a.pred?Math.abs(a.pred.spread):999;
+                    var bs=b.pred?Math.abs(b.pred.spread):999;
+                    if(as!==bs)return as-bs;
+                    return (a.startDate||'').localeCompare(b.startDate||'');
+                }});
+            }}else if(currentSort==='ranking'){{
+                rest.sort(function(a,b){{
+                    var ar=Math.min(a.awayTeam?a.awayTeam.net:999,a.homeTeam?a.homeTeam.net:999);
+                    var br=Math.min(b.awayTeam?b.awayTeam.net:999,b.homeTeam?b.homeTeam.net:999);
+                    if(ar!==br)return ar-br;
+                    return (a.startDate||'').localeCompare(b.startDate||'');
+                }});
+            }}
+            return live.concat(rest);
+        }}
+
         function renderGames(data){{
             var events=data.events||[];
             var games=[];
@@ -4467,23 +4534,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 }});
             }});
 
-            /* Sort: live first, then by watchability (high to low), then unpredicted by time */
-            games.sort(function(a,b){{
-                var aOrd=a.state==='in'?0:(a.pred?1:2);
-                var bOrd=b.state==='in'?0:(b.pred?1:2);
-                if(aOrd!==bOrd)return aOrd-bOrd;
-                /* Within same tier, sort by watchability desc */
-                var aw=a.pred?a.pred.watch:0;
-                var bw=b.pred?b.pred.watch:0;
-                if(aw!==bw)return bw-aw;
-                return (a.startDate||'').localeCompare(b.startDate||'');
-            }});
-
             var totalGames=games.length;
             games=filterGames(games);
+            games=sortGames(games);
 
             var withPred=games.filter(function(g){{return g.pred!==null;}}).length;
-            var html='<div class="sched-summary">'+(currentFilter!=='all'?games.length+' of '+totalGames+' games':games.length+' games')+
+            var html=buildSortBar();
+            html+='<div class="sched-summary">'+(currentFilter!=='all'?games.length+' of '+totalGames+' games':games.length+' games')+
                 (withPred>0?' &middot; '+withPred+' with predictions':'')+
                 '</div>';
 
@@ -4631,6 +4688,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 currentFilter=this.value;
                 if(cache[currentDate])loadDate(currentDate);
             }};
+            var sortBtns=document.querySelectorAll('.sched-sort-btn');
+            sortBtns.forEach(function(btn){{
+                btn.onclick=function(){{
+                    currentSort=this.getAttribute('data-sort');
+                    if(cache[currentDate])loadDate(currentDate);
+                }};
+            }});
         }}
 
         /* Auto-refresh for live games — 20s polling */
