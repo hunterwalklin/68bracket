@@ -4463,32 +4463,34 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
 
         function sortGames(games){{
-            /* Live games always float to top */
-            var live=games.filter(function(g){{return g.state==='in';}});
-            var rest=games.filter(function(g){{return g.state!=='in';}});
+            var cmp;
             if(currentSort==='time'){{
-                rest.sort(function(a,b){{return (a.startDate||'').localeCompare(b.startDate||'');}});
+                cmp=function(a,b){{return (a.startDate||'').localeCompare(b.startDate||'');}};
             }}else if(currentSort==='watchability'){{
-                rest.sort(function(a,b){{
+                cmp=function(a,b){{
                     var aw=a.pred?a.pred.watch:0,bw=b.pred?b.pred.watch:0;
                     if(aw!==bw)return bw-aw;
                     return (a.startDate||'').localeCompare(b.startDate||'');
-                }});
+                }};
             }}else if(currentSort==='spread'){{
-                rest.sort(function(a,b){{
+                cmp=function(a,b){{
                     var as=a.pred?Math.abs(a.pred.spread):999;
                     var bs=b.pred?Math.abs(b.pred.spread):999;
                     if(as!==bs)return as-bs;
                     return (a.startDate||'').localeCompare(b.startDate||'');
-                }});
+                }};
             }}else if(currentSort==='ranking'){{
-                rest.sort(function(a,b){{
+                cmp=function(a,b){{
                     var ar=Math.min(a.awayTeam?a.awayTeam.net:999,a.homeTeam?a.homeTeam.net:999);
                     var br=Math.min(b.awayTeam?b.awayTeam.net:999,b.homeTeam?b.homeTeam.net:999);
                     if(ar!==br)return ar-br;
                     return (a.startDate||'').localeCompare(b.startDate||'');
-                }});
+                }};
             }}
+            /* Live games first, then rest — same sort within each group */
+            var live=games.filter(function(g){{return g.state==='in';}});
+            var rest=games.filter(function(g){{return g.state!=='in';}});
+            if(cmp){{live.sort(cmp);rest.sort(cmp);}}
             return live.concat(rest);
         }}
 
