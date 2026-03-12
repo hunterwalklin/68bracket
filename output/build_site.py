@@ -4450,7 +4450,9 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var state=statusType.state||'pre'; /* pre, in, post */
                 var detail=statusType.shortDetail||statusType.detail||'';
                 var startDate=comp.date||ev.date||'';
-                var pred=predict(awayTeam,homeTeam,homeId);
+                var notes=comp.notes||[];
+                var isNeutral=notes.length>0; /* conf tourney games have notes */
+                var pred=predict(awayTeam,homeTeam,isNeutral?null:homeId);
                 games.push({{
                     awayName:awayName,homeName:homeName,
                     awayId:awayId,homeId:homeId,
@@ -4460,6 +4462,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     awayScore:awayScore,homeScore:homeScore,
                     state:state,detail:detail,
                     startDate:startDate,
+                    isNeutral:isNeutral,
                     pred:pred
                 }});
             }});
@@ -4873,7 +4876,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     homeScore:home.score?parseInt(home.score):0,
                     state:state,detail:detail,
                     gameDate:gameDate,
-                    pred:predict(awayTeam,homeTeam,homeId),
+                    pred:predict(awayTeam,homeTeam,null),
                     headline:headline
                 }});
             }});
@@ -6031,6 +6034,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 var homeTeam=byEspn[homeId]||null;
                 var awayName=awayTeam?awayTeam.name:(away.team&&away.team.displayName?away.team.displayName:'TBD');
                 var homeName=homeTeam?homeTeam.name:(home.team&&home.team.displayName?home.team.displayName:'TBD');
+                var notes=comp.notes||[];
+                var isNeutral=notes.length>0;
                 games.push({{
                     awayName:awayName,homeName:homeName,
                     awayId:awayId,homeId:homeId,
@@ -6039,7 +6044,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     homeScore:home.score?parseInt(home.score):0,
                     state:(comp.status||{{}}).type?((comp.status||{{}}).type.state||'pre'):'pre',
                     detail:((comp.status||{{}}).type||{{}}).shortDetail||'',
-                    pred:predict(awayTeam,homeTeam,homeId)
+                    isNeutral:isNeutral,
+                    pred:predict(awayTeam,homeTeam,isNeutral?null:homeId)
                 }});
             }});
             return games;
