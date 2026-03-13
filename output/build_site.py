@@ -685,7 +685,7 @@ def _build_standings_tab(stats_df) -> str:
     return html
 
 
-def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
+def _build_autobid_tab(stats_df, seed_overrides: dict | None = None, bubble: dict | None = None) -> str:
     """Generate an HTML table showing projected conference auto-bid winners."""
     if stats_df is None:
         return '<p style="color: var(--text-muted);">Auto-bid data not available. Run the predict command to generate.</p>'
@@ -694,6 +694,28 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
 
     # Project conference tournament winners using bracket simulation
     projected_winners = project_conf_tourney_winners(stats_df, seed_overrides=seed_overrides)
+
+    # Build set of teams in the projected bracket field and bubble
+    bubble = bubble or {}
+    bubble_teams = set(bubble.get("last_4_in", [])) | set(bubble.get("first_4_out", [])) | set(bubble.get("last_4_byes", []))
+    # Read the seed list to determine which teams are in the field
+    _field_teams = set()
+    _predictions_path = os.path.join(PROCESSED_DIR, "predictions_2026.md")
+    if os.path.exists(_predictions_path):
+        with open(_predictions_path, "r") as _f:
+            for _line in _f:
+                # Seed list lines look like: | 1 | Michigan, Duke, ... |
+                if _line.startswith("|") and "|" in _line[1:]:
+                    parts = _line.split("|")
+                    if len(parts) >= 3:
+                        try:
+                            int(parts[1].strip())
+                            for t in parts[2].split(","):
+                                t = t.strip().rstrip("*")
+                                if t:
+                                    _field_teams.add(t)
+                        except ValueError:
+                            pass
 
     # Determine which conferences have actual (not simulated) winners
     actual_winners, _ = _fetch_conf_tourney_eliminated()
@@ -749,10 +771,23 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
 
         net = int(w["net_ranking"])
 
-        if prob_val >= 90:
+        team_name = str(w["team"])
+        # Determine at-large cutline from bubble (NET of worst first-4-out team)
+        _f4o = bubble.get("first_4_out", [])
+        _cutline_net = 0
+        for _t in _f4o:
+            _r = df[df["team"] == _t]
+            if len(_r):
+                _cutline_net = max(_cutline_net, int(_r.iloc[0]["net_ranking"]))
+
+        if c["has_autobid"]:
             status = "Lock"
             status_cls = "status-lock"
-        elif prob_val >= 50 and net <= 80:
+        elif net <= _cutline_net:
+            # Team's NET is good enough for an at-large bid
+            status = "Lock"
+            status_cls = "status-lock"
+        elif team_name in bubble_teams:
             status = "Likely In"
             status_cls = "status-likely"
         else:
@@ -7204,7 +7239,7 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
         stats_html = _build_stats_table(stats_df)
         conf_tab_html = _build_conf_tab(stats_df)
         standings_tab_html = _build_standings_tab(stats_df)
-        autobid_tab_html = _build_autobid_tab(stats_df, seed_overrides=_CONF_SEED_OVERRIDES)
+        autobid_tab_html = _build_autobid_tab(stats_df, seed_overrides=_CONF_SEED_OVERRIDES, bubble=bubble)
 
     # Compute last_4_byes if missing (older bubble.json files lack this field)
     if bubble and "last_4_byes" not in bubble and stats_df is not None:
