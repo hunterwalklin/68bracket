@@ -9,3 +9,10 @@ logs/
 .DS_Store
 catboost_info/
 data/brackets/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

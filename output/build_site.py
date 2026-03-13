@@ -1843,6 +1843,74 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     # Parse bracket code blocks
     brackets = re.findall(r"## (\w+) Region\n\n```text\n(.+?)```", md, re.DOTALL)
 
+    # Build chat context with full bracket data
+    _chat_lines = []
+    _chat_lines.append(f"68bracket NCAA Tournament Projections ({timestamp})")
+    _chat_lines.append(f"Model: {model_label}")
+    _chat_lines.append("")
+    _chat_lines.append("=== SEED LIST ===")
+    for seed_num, teams_str in seed_rows:
+        _chat_lines.append(f"Seed {seed_num}: {teams_str}")
+    _chat_lines.append("")
+    _chat_lines.append("=== FIRST FOUR ===")
+    for ff in first_four:
+        _chat_lines.append(ff)
+    _chat_lines.append("")
+    _chat_lines.append("=== BUBBLE ===")
+    if bubble and bubble.get("last_4_byes"):
+        _chat_lines.append(f"Last 4 Byes: {', '.join(bubble['last_4_byes'])}")
+    if last_4_in:
+        _chat_lines.append(f"Last 4 In: {last_4_in[0]}")
+    if first_4_out:
+        _chat_lines.append(f"First 4 Out: {first_4_out[0]}")
+    if next_4_out:
+        _chat_lines.append(f"Next 4 Out: {next_4_out[0]}")
+    _chat_lines.append("")
+    _chat_lines.append("=== REGIONAL BRACKETS ===")
+    for region_name, region_text in brackets:
+        _chat_lines.append(f"\n{region_name} Region:")
+        # Extract matchups from bracket text
+        matchups = re.findall(r"\((\d+)\)\s+(.+?)(?:\s[─┐┘├┤┼]|$)", region_text)
+        for seed, team in matchups:
+            _chat_lines.append(f"  ({seed}) {team.strip()}")
+    if changes:
+        _chat_lines.append("")
+        _chat_lines.append("=== TODAY'S MOVERS ===")
+        for team, info in changes.items():
+            direction = info.get("direction", "")
+            prev = info.get("prev_seed", "")
+            new = info.get("new_seed", "")
+            arrow = "↑" if direction == "up" else "↓"
+            _chat_lines.append(f"{team}: {arrow} {prev} -> {new}")
+    if stats_df is not None:
+        _chat_lines.append("")
+        _chat_lines.append("=== TEAM STATS (top 80 by NET) ===")
+        _chat_lines.append("Team | Conf | Record | NET | KPI | SOR | BPI | KenPom | WAB | AdjOE | AdjDE | Q1 | Q2")
+        _stats_sorted = stats_df[stats_df["net_ranking"] > 0].sort_values("net_ranking").head(80)
+        for _, _r in _stats_sorted.iterrows():
+            _cw = int(_r.get("conf_wins", 0)) if pd.notna(_r.get("conf_wins")) else 0
+            _cl = int(_r.get("conf_losses", 0)) if pd.notna(_r.get("conf_losses")) else 0
+            _w = int(_r.get("wins", 0)) if pd.notna(_r.get("wins")) else 0
+            _l = int(_r.get("losses", 0)) if pd.notna(_r.get("losses")) else 0
+            _oe = round(float(_r.get("adj_oe", 0)), 1) if pd.notna(_r.get("adj_oe")) else ""
+            _de = round(float(_r.get("adj_de", 0)), 1) if pd.notna(_r.get("adj_de")) else ""
+            _net = int(_r["net_ranking"])
+            _kpi = int(_r.get("kpi_ranking", 0)) if pd.notna(_r.get("kpi_ranking")) else ""
+            _sor = int(_r.get("sor_ranking", 0)) if pd.notna(_r.get("sor_ranking")) else ""
+            _bpi = int(_r.get("bpi_ranking", 0)) if pd.notna(_r.get("bpi_ranking")) else ""
+            _pom = int(_r.get("kenpom_ranking", 0)) if pd.notna(_r.get("kenpom_ranking")) else ""
+            _wab = round(float(_r.get("wab", 0)), 1) if pd.notna(_r.get("wab")) else ""
+            _q1w = int(_r.get("q1_wins", 0)) if pd.notna(_r.get("q1_wins")) else 0
+            _q1l = int(_r.get("q1_losses", 0)) if pd.notna(_r.get("q1_losses")) else 0
+            _q2w = int(_r.get("q2_wins", 0)) if pd.notna(_r.get("q2_wins")) else 0
+            _q2l = int(_r.get("q2_losses", 0)) if pd.notna(_r.get("q2_losses")) else 0
+            _chat_lines.append(
+                f"{_r['team']} | {_r.get('conference','')} | {_w}-{_l} ({_cw}-{_cl}) | "
+                f"{_net} | {_kpi} | {_sor} | {_bpi} | {_pom} | {_wab} | {_oe} | {_de} | "
+                f"{_q1w}-{_q1l} | {_q2w}-{_q2l}"
+            )
+    _chat_context = "\\n".join(_chat_lines).replace("'", "\\'").replace('"', '\\"')
+
     # Build name -> school_id lookup for logos
     _name_to_sid = {}
     if stats_df is not None:
@@ -7351,29 +7419,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }});
         closeBtn.addEventListener('click',function(){{ panel.classList.remove('open'); }});
 
-        function buildContext(){{
-            var seeds=window.__SEED_LIST__||{{}};
-            var bubble=window.__BUBBLE_DATA__||{{}};
-            var teams=window.__SCORES_TEAMS__||[];
-            var lines=[];
-            /* Seed list */
-            var bySeed={{}};
-            for(var t in seeds){{ var s=seeds[t]; if(!bySeed[s])bySeed[s]=[]; bySeed[s].push(t); }}
-            lines.push('Current projected bracket:');
-            for(var s=1;s<=16;s++){{ if(bySeed[s])lines.push('Seed '+s+': '+bySeed[s].join(', ')); }}
-            /* Bubble */
-            if(bubble.last_4_in)lines.push('\\nLast 4 In: '+bubble.last_4_in.join(', '));
-            if(bubble.first_4_out)lines.push('First 4 Out: '+bubble.first_4_out.join(', '));
-            if(bubble.next_4_out)lines.push('Next 4 Out: '+bubble.next_4_out.join(', '));
-            /* Top teams with stats */
-            lines.push('\\nKey team stats (name, conf, record, NET, adj_oe, adj_de):');
-            var sorted=teams.slice().sort(function(a,b){{return (a.net||999)-(b.net||999);}});
-            for(var i=0;i<Math.min(50,sorted.length);i++){{
-                var t=sorted[i];
-                lines.push(t.name+' ('+t.conf+') '+(t.rec||'')+' NET='+t.net+' OE='+(t.oe||'')+' DE='+(t.de||''));
-            }}
-            return lines.join('\\n');
-        }}
+        var CHAT_CONTEXT='{_chat_context}';
 
         function addMsg(text,role){{
             var div=document.createElement('div');
@@ -7404,7 +7450,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             messagesEl.appendChild(typing);
             messagesEl.scrollTop=messagesEl.scrollHeight;
 
-            var context=buildContext();
+            var context=CHAT_CONTEXT;
 
             fetch(CHAT_API,{{
                 method:'POST',
