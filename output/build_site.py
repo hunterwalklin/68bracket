@@ -695,6 +695,9 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
     # Project conference tournament winners using bracket simulation
     projected_winners = project_conf_tourney_winners(stats_df, seed_overrides=seed_overrides)
 
+    # Determine which conferences have actual (not simulated) winners
+    actual_winners, _ = _fetch_conf_tourney_eliminated()
+
     conferences = []
     for conf, grp in df.groupby("conference"):
         grp_sorted = grp.sort_values(["conf_win_pct", "net_ranking"], ascending=[False, True])
@@ -712,6 +715,7 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
 
         prob = float(winner["selection_prob"]) if pd.notna(winner.get("selection_prob")) else 0.0
         at_large = int((grp[grp["team"] != winner["team"]]["selection_prob"] > 0.5).sum())
+        has_autobid = conf in actual_winners
 
         conferences.append({
             "conf": conf,
@@ -719,6 +723,7 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
             "runner_up": runner_up,
             "prob": prob,
             "at_large": at_large,
+            "has_autobid": has_autobid,
         })
 
     # Sort by winner's NET ranking
@@ -738,7 +743,10 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
             prob_cls = "prob-low"
         prob_str = f"{prob_val:.1f}%"
 
-        if c["prob"] >= 0.9:
+        if c["has_autobid"]:
+            status = "Auto Bid"
+            status_cls = "status-lock"
+        elif c["prob"] >= 0.9:
             status = "Lock"
             status_cls = "status-lock"
         elif c["prob"] >= 0.5:
