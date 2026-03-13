@@ -1807,7 +1807,7 @@ def _build_power_rankings_tab(stats_df: pd.DataFrame) -> str:
 </table></div>"""
 
 
-def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", appoll_tab_html: str = "", conftourney_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf") -> str:
+def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", bubble_tab_html: str = "", conf_tab_html: str = "", standings_tab_html: str = "", autobid_tab_html: str = "", matrix_tab_html: str = "", ranking_tab_html: str = "", scores_tab_html: str = "", schedule_tab_html: str = "", homecourt_tab_html: str = "", summary_tab_html: str = "", appoll_tab_html: str = "", conftourney_tab_html: str = "", bubble: dict | None = None, stats_df=None, model_type: str = "rf", chat_api_url: str = "") -> str:
     """Convert the predictions markdown to styled HTML."""
     if changes is None:
         changes = {}
@@ -3884,6 +3884,138 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             .team-sched-result {{ width: 65px; }}
             .box-table {{ font-size: 0.6rem; }}
             .box-table td:first-child {{ max-width: 80px; }}
+        }}
+
+        /* ── Chat Widget ──────────────────────────────── */
+        .chat-btn {{
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 9998;
+            transition: transform 0.15s;
+        }}
+        .chat-btn:hover {{ transform: scale(1.08); }}
+        .chat-panel {{
+            position: fixed;
+            bottom: 5.5rem;
+            right: 1.5rem;
+            width: 380px;
+            max-height: 520px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            z-index: 9999;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }}
+        .chat-panel.open {{ display: flex; }}
+        .chat-header {{
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .chat-header button {{
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 0;
+        }}
+        .chat-messages {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            min-height: 200px;
+            max-height: 360px;
+        }}
+        .chat-msg {{
+            max-width: 85%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            word-wrap: break-word;
+        }}
+        .chat-msg.user {{
+            align-self: flex-end;
+            background: var(--accent);
+            color: #fff;
+            border-bottom-right-radius: 3px;
+        }}
+        .chat-msg.bot {{
+            align-self: flex-start;
+            background: var(--border);
+            color: var(--text);
+            border-bottom-left-radius: 3px;
+        }}
+        .chat-msg.bot p {{ margin: 0 0 0.4rem; }}
+        .chat-msg.bot p:last-child {{ margin-bottom: 0; }}
+        .chat-input-row {{
+            display: flex;
+            border-top: 1px solid var(--border);
+            padding: 0.5rem;
+            gap: 0.4rem;
+        }}
+        .chat-input-row input {{
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text);
+            font-size: 0.82rem;
+            outline: none;
+        }}
+        .chat-input-row input:focus {{ border-color: var(--accent); }}
+        .chat-input-row button {{
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 0.9rem;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }}
+        .chat-input-row button:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+        }}
+        .chat-typing {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.3rem 0.75rem;
+            font-style: italic;
+        }}
+        @media (max-width: 500px) {{
+            .chat-panel {{
+                width: calc(100vw - 1.5rem);
+                right: 0.75rem;
+                bottom: 5rem;
+                max-height: 70vh;
+            }}
         }}
     </style>
 </head>
@@ -7186,6 +7318,120 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         render(curWeek);
     }})();
     </script>
+
+    <!-- Chat Widget -->
+    <button class="chat-btn" id="chat-toggle" title="Ask about the bracket">💬</button>
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-header">
+            <span>Ask about the bracket</span>
+            <button id="chat-close">&times;</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg bot">Ask me anything about the projected bracket, seeds, matchups, or bubble teams.</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="e.g. Why is Duke a 1 seed?" autocomplete="off">
+            <button id="chat-send">Send</button>
+        </div>
+    </div>
+    <script>
+    (function(){{
+        var CHAT_API='{chat_api_url}';
+        var toggle=document.getElementById('chat-toggle');
+        var panel=document.getElementById('chat-panel');
+        var closeBtn=document.getElementById('chat-close');
+        var input=document.getElementById('chat-input');
+        var sendBtn=document.getElementById('chat-send');
+        var messagesEl=document.getElementById('chat-messages');
+        var history=[];
+
+        toggle.addEventListener('click',function(){{
+            panel.classList.toggle('open');
+            if(panel.classList.contains('open'))input.focus();
+        }});
+        closeBtn.addEventListener('click',function(){{ panel.classList.remove('open'); }});
+
+        function buildContext(){{
+            var seeds=window.__SEED_LIST__||{{}};
+            var bubble=window.__BUBBLE_DATA__||{{}};
+            var teams=window.__SCORES_TEAMS__||[];
+            var lines=[];
+            /* Seed list */
+            var bySeed={{}};
+            for(var t in seeds){{ var s=seeds[t]; if(!bySeed[s])bySeed[s]=[]; bySeed[s].push(t); }}
+            lines.push('Current projected bracket:');
+            for(var s=1;s<=16;s++){{ if(bySeed[s])lines.push('Seed '+s+': '+bySeed[s].join(', ')); }}
+            /* Bubble */
+            if(bubble.last_4_in)lines.push('\\nLast 4 In: '+bubble.last_4_in.join(', '));
+            if(bubble.first_4_out)lines.push('First 4 Out: '+bubble.first_4_out.join(', '));
+            if(bubble.next_4_out)lines.push('Next 4 Out: '+bubble.next_4_out.join(', '));
+            /* Top teams with stats */
+            lines.push('\\nKey team stats (name, conf, record, NET, adj_oe, adj_de):');
+            var sorted=teams.slice().sort(function(a,b){{return (a.net||999)-(b.net||999);}});
+            for(var i=0;i<Math.min(50,sorted.length);i++){{
+                var t=sorted[i];
+                lines.push(t.name+' ('+t.conf+') '+(t.rec||'')+' NET='+t.net+' OE='+(t.oe||'')+' DE='+(t.de||''));
+            }}
+            return lines.join('\\n');
+        }}
+
+        function addMsg(text,role){{
+            var div=document.createElement('div');
+            div.className='chat-msg '+role;
+            div.textContent=text;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop=messagesEl.scrollHeight;
+        }}
+
+        function send(){{
+            var q=input.value.trim();
+            if(!q)return;
+            addMsg(q,'user');
+            input.value='';
+            sendBtn.disabled=true;
+
+            if(!CHAT_API){{
+                addMsg('Chat API not configured. Set CHAT_API_URL when building the site.','bot');
+                sendBtn.disabled=false;
+                return;
+            }}
+
+            history.push({{role:'user',content:q}});
+
+            var typing=document.createElement('div');
+            typing.className='chat-typing';
+            typing.textContent='Thinking...';
+            messagesEl.appendChild(typing);
+            messagesEl.scrollTop=messagesEl.scrollHeight;
+
+            var context=buildContext();
+
+            fetch(CHAT_API,{{
+                method:'POST',
+                headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{context:context,messages:history}})
+            }}).then(function(r){{
+                if(!r.ok)throw new Error('API error '+r.status);
+                return r.json();
+            }}).then(function(data){{
+                typing.remove();
+                var reply=data.reply||data.content||'No response';
+                addMsg(reply,'bot');
+                history.push({{role:'assistant',content:reply}});
+                sendBtn.disabled=false;
+            }}).catch(function(e){{
+                typing.remove();
+                addMsg('Error: '+e.message,'bot');
+                sendBtn.disabled=false;
+            }});
+        }}
+
+        sendBtn.addEventListener('click',send);
+        input.addEventListener('keydown',function(e){{
+            if(e.key==='Enter')send();
+        }});
+    }})();
+    </script>
 </body>
 </html>"""
 
@@ -7304,7 +7550,8 @@ def build(changes: dict | None = None, stats_df=None, bubble: dict | None = None
 
     os.makedirs(SITE_DIR, exist_ok=True)
 
-    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, appoll_tab_html=appoll_tab_html, conftourney_tab_html=conftourney_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type)
+    chat_api_url = os.environ.get("CHAT_API_URL", "")
+    html = md_to_html(md_path, changes=changes, stats_html=stats_html, bubble_tab_html=bubble_tab_html, conf_tab_html=conf_tab_html, standings_tab_html=standings_tab_html, autobid_tab_html=autobid_tab_html, matrix_tab_html=matrix_tab_html, ranking_tab_html=ranking_tab_html, scores_tab_html=scores_tab_html, schedule_tab_html=schedule_tab_html, homecourt_tab_html=homecourt_tab_html, summary_tab_html=summary_tab_html, appoll_tab_html=appoll_tab_html, conftourney_tab_html=conftourney_tab_html, bubble=bubble, stats_df=stats_df, model_type=model_type, chat_api_url=chat_api_url)
 
     out_path = os.path.join(SITE_DIR, "index.html")
     with open(out_path, "w") as f:
