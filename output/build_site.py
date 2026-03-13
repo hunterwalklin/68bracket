@@ -157,6 +157,9 @@ _CONF_SEED_OVERRIDES = {
 def _fetch_conf_tourney_eliminated() -> tuple[dict[str, str], dict[str, set[str]]]:
     """Fetch ESPN conference tournament results to find eliminated teams and actual winners.
 
+    Uses ESPN team IDs to map back to our canonical team names, avoiding
+    mismatches between ESPN short names (e.g. "Pitt") and ours ("Pittsburgh").
+
     Returns:
         (actual_winners, eliminated) where:
         - actual_winners: conf_name -> winning team display name (only for completed tournaments)
@@ -179,6 +182,28 @@ def _fetch_conf_tourney_eliminated() -> tuple[dict[str, str], dict[str, set[str]
         "Summit League": "Summit", "Southland Conference": "Southland",
         "Southern Conference": "Southern", "ASUN": "A-Sun", "SoCon": "Southern",
     }
+
+    # Build ESPN ID -> our canonical team name lookup
+    _espn_id_to_team: dict[str, str] = {}
+    try:
+        import pandas as pd
+        _df = pd.read_parquet(os.path.join(PROCESSED_DIR, "stats_snapshot.parquet"))
+        for _, _r in _df.iterrows():
+            sid = str(_r.get("school_id", ""))
+            espn_id = _ESPN_LOGOS.get(sid, "")
+            if espn_id and _r.get("team"):
+                _espn_id_to_team[espn_id] = str(_r["team"])
+    except Exception:
+        pass
+
+    def _resolve_team_name(competitor):
+        """Resolve an ESPN competitor to our canonical team name."""
+        team_data = competitor.get("team", {})
+        espn_id = str(team_data.get("id", ""))
+        if espn_id and espn_id in _espn_id_to_team:
+            return _espn_id_to_team[espn_id]
+        # Fallback to ESPN display name
+        return team_data.get("shortDisplayName", "") or team_data.get("displayName", "")
 
     eliminated: dict[str, set[str]] = {}
     actual_winners: dict[str, str] = {}
@@ -237,10 +262,8 @@ def _fetch_conf_tourney_eliminated() -> tuple[dict[str, str], dict[str, set[str]
                 if not away or not home:
                     continue
 
-                away_team = away.get("team", {})
-                home_team = home.get("team", {})
-                away_name = away_team.get("shortDisplayName", "") or away_team.get("displayName", "")
-                home_name = home_team.get("shortDisplayName", "") or home_team.get("displayName", "")
+                away_name = _resolve_team_name(away)
+                home_name = _resolve_team_name(home)
                 away_score = int(away.get("score", 0) or 0)
                 home_score = int(home.get("score", 0) or 0)
 
@@ -259,7 +282,12 @@ def _fetch_conf_tourney_eliminated() -> tuple[dict[str, str], dict[str, set[str]
                 # Check if this is the championship game
                 round_name = parts[1].strip() if len(parts) > 1 else ""
                 round_lower = round_name.lower()
-                if "final" in round_lower or "championship" in round_lower:
+                is_championship = (
+                    "championship" in round_lower
+                    or round_lower in ("final", "finals")
+                    or (round_lower == "final round")
+                )
+                if is_championship:
                     winner_name = home_name if home_score > away_score else away_name
                     actual_winners[conf_name] = winner_name
 
