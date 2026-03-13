@@ -60,6 +60,8 @@ jobs:
         run: python -m main train --model full_ensemble
 
       - name: Generate predictions and build site
+        env:
+          CHAT_API_URL: https://68bracket-chat.hunter-walklin.workers.dev
         run: python -m main predict --model full_ensemble
 
       # - name: Post to Bluesky
