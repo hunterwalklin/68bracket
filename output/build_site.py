@@ -744,7 +744,7 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
         prob_str = f"{prob_val:.1f}%"
 
         if c["has_autobid"]:
-            status = "Auto Bid"
+            status = "Lock"
             status_cls = "status-lock"
         elif c["prob"] >= 0.9:
             status = "Lock"
