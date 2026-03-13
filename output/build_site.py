@@ -735,6 +735,10 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
         ru = c["runner_up"]
         prob_val = c["prob"] * 100
 
+        # Actual auto-bid winners are guaranteed in
+        if c["has_autobid"]:
+            prob_val = 100.0
+
         if prob_val >= 70:
             prob_cls = "prob-high"
         elif prob_val >= 40:
@@ -743,13 +747,12 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
             prob_cls = "prob-low"
         prob_str = f"{prob_val:.1f}%"
 
-        if c["has_autobid"]:
+        net = int(w["net_ranking"])
+
+        if prob_val >= 90:
             status = "Lock"
             status_cls = "status-lock"
-        elif c["prob"] >= 0.9:
-            status = "Lock"
-            status_cls = "status-lock"
-        elif c["prob"] >= 0.5:
+        elif prob_val >= 50 and net <= 80:
             status = "Likely In"
             status_cls = "status-likely"
         else:
@@ -760,8 +763,6 @@ def _build_autobid_tab(stats_df, seed_overrides: dict | None = None) -> str:
         conf_losses = int(w["conf_losses"]) if pd.notna(w.get("conf_losses")) else 0
         conf_rec = f"{conf_wins}-{conf_losses}"
         conf_sv = conf_wins * 100 - conf_losses
-
-        net = int(w["net_ranking"])
         al = c["at_large"]
         al_sv = al if al > 0 else -1
 
