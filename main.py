@@ -282,6 +282,20 @@ def cmd_predict(args):
     # Stage 1: Select 68 teams
     print("\nStage 1: Selecting tournament field...")
     field = sel_model.select_field(pred_df)
+
+    # Manual override: ensure Miami (OH) is in the field
+    if "Miami (OH)" not in field["team"].values:
+        miami = pred_df[pred_df["team"] == "Miami (OH)"].copy()
+        if not miami.empty:
+            miami["selection_prob"] = sel_model.predict_proba(miami)
+            miami["selection_method"] = "at_large"
+            # Bump the weakest at-large team
+            at_large = field[field["selection_method"] == "at_large"]
+            weakest = at_large.sort_values("selection_prob").iloc[0]
+            field = field[field["team"] != weakest["team"]]
+            field = pd.concat([field, miami], ignore_index=True)
+            print(f"  Override: Added Miami (OH), removed {weakest['team']}")
+
     print(f"  Selected {len(field)} teams")
 
     # Stage 2: Assign seeds

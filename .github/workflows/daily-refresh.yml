@@ -64,11 +64,11 @@ jobs:
           CHAT_API_URL: https://68bracket-chat.hunter-walklin.workers.dev
         run: python -m main predict --model full_ensemble
 
-      - name: Post to Bluesky
-        env:
-          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
-          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
-        run: python bot/twitter_bot.py
+      # - name: Post to Bluesky
+      #   env:
+      #     BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+      #     BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      #   run: python bot/twitter_bot.py
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
