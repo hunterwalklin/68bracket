@@ -1,9 +1,9 @@
 name: Daily Refresh
 
 on:
-  schedule:
-    # Run daily at 15:00 UTC (10:00 AM Eastern / 9:00 AM Central)
-    - cron: "0 15 * * *"
+  # schedule:
+  #   # Run daily at 15:00 UTC (10:00 AM Eastern / 9:00 AM Central)
+  #   - cron: "0 15 * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
 permissions:
