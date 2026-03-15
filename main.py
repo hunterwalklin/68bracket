@@ -302,6 +302,21 @@ def cmd_predict(args):
     print("\nStage 2: Assigning seeds...")
     seeded = seed_model.assign_seeds(field)
 
+    # Override: Lock Duke, Arizona, Michigan as 1 seeds
+    lock_1_seeds = ["Duke", "Arizona", "Michigan"]
+    for team_name in lock_1_seeds:
+        mask = seeded["team"] == team_name
+        if mask.any() and int(seeded.loc[mask, "predicted_seed"].iloc[0]) != 1:
+            # Find a team currently on the 1 line that shouldn't be locked
+            ones = seeded[(seeded["predicted_seed"] == 1) & (~seeded["team"].isin(lock_1_seeds))]
+            if not ones.empty:
+                # Swap: give the locked team the 1 seed, demote the other
+                bump = ones.sort_values("raw_seed", ascending=False).iloc[0]
+                old_seed = int(seeded.loc[mask, "predicted_seed"].iloc[0])
+                seeded.loc[mask, "predicted_seed"] = 1
+                seeded.loc[seeded["team"] == bump["team"], "predicted_seed"] = old_seed
+                print(f"  Override: {team_name} locked to 1 seed, {bump['team']} moved to {old_seed} seed")
+
     # Compute bubble from seeded bracket (after seed assignment so it matches)
     # Last 4 In = the 4 at-large First Four teams (weakest at-large by raw_seed)
     at_large_seeded = seeded[seeded["selection_method"] == "at_large"]
