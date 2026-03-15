@@ -147,26 +147,52 @@ def _enforce_conference_separation(slots):
 # Conference meeting avoidance (seeds 5-16, soft constraint)
 # ---------------------------------------------------------------------------
 
-def _count_half_conflicts(slots):
-    """Count same-conference teams placed in the same bracket half of the
-    same region. These teams could meet before the regional final."""
-    groups = defaultdict(list)
-    for s in slots:
-        h = _get_half(s["seed"])
-        if h:
-            groups[(s["region"], h)].append(s["conf"])
+# First-round matchup pairs (these seeds play each other directly)
+_FIRST_ROUND_SET = set()
+for _h, _l in [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10), (2, 15)]:
+    _FIRST_ROUND_SET.add((_h, _l))
+    _FIRST_ROUND_SET.add((_l, _h))
 
-    conflicts = 0
-    for confs in groups.values():
-        for _, n in Counter(confs).items():
-            if n > 1:
-                conflicts += n - 1
-    return conflicts
+# Quadrant seed groups (teams in same quadrant can meet in 2nd round)
+_QUADRANT_SEED_SETS = [set(v) for v in QUADRANTS.values()]
+
+
+def _score_conference_conflicts(slots):
+    """Score same-conference meeting potential across all regions. Lower is better.
+
+    Penalties per pair of same-conference teams in the same region:
+    - First-round opponents (e.g., 7 vs 10): 1000 (100 if conf has 9+ teams)
+    - Same quadrant / 2nd-round potential: 100 (5 if 9+ teams)
+    - Same bracket half / regional-semi potential: 10 (1 if 9+ teams)
+    """
+    conf_counts = Counter(s["conf"] for s in slots if s["conf"])
+    large_confs = {c for c, n in conf_counts.items() if n >= 9}
+
+    region_conf_seeds = defaultdict(list)
+    for s in slots:
+        if s["conf"]:
+            region_conf_seeds[(s["region"], s["conf"])].append(s["seed"])
+
+    penalty = 0
+    for (region, conf), seeds in region_conf_seeds.items():
+        if len(seeds) < 2:
+            continue
+        relaxed = conf in large_confs
+        for i in range(len(seeds)):
+            for j in range(i + 1, len(seeds)):
+                s1, s2 = seeds[i], seeds[j]
+                if (s1, s2) in _FIRST_ROUND_SET:
+                    penalty += 100 if relaxed else 1000
+                elif any(s1 in qs and s2 in qs for qs in _QUADRANT_SEED_SETS):
+                    penalty += 5 if relaxed else 100
+                elif _get_half(s1) == _get_half(s2):
+                    penalty += 1 if relaxed else 10
+    return penalty
 
 
 def _reduce_conference_meetings(slots):
     """For seeds 5-16, try region permutations to minimize same-conference
-    matchups before the regional final (same bracket half of same region)."""
+    matchups, with heavy penalties for first-round and same-quadrant meetings."""
     for seed in range(5, 17):
         seed_slots = [s for s in slots if s["seed"] == seed]
         if len(seed_slots) != 4:
@@ -174,7 +200,7 @@ def _reduce_conference_meetings(slots):
 
         s_curve = _build_s_curve(seed)
         best = [s["region"] for s in seed_slots]
-        best_c = None
+        best_score = None
         best_dist = None
 
         for perm in permutations(range(4)):
@@ -183,12 +209,12 @@ def _reduce_conference_meetings(slots):
             for i, s in enumerate(seed_slots):
                 s["region"] = perm[i]
 
-            c = _count_half_conflicts(slots)
+            score = _score_conference_conflicts(slots)
             dist = sum(1 for a, b in zip(perm, s_curve) if a != b)
 
-            if best_c is None or c < best_c or (c == best_c and dist < best_dist):
+            if best_score is None or score < best_score or (score == best_score and dist < best_dist):
                 best = list(perm)
-                best_c = c
+                best_score = score
                 best_dist = dist
 
         # Apply best permanently
@@ -260,8 +286,14 @@ def _optimize_geography(slots):
                     swp = venue_dist(a["team"], b["region"]) + venue_dist(b["team"], a["region"])
 
                     if swp < cur and swap_preserves_conf_separation(a, b):
+                        old_conf = _score_conference_conflicts(slots)
                         a["region"], b["region"] = b["region"], a["region"]
-                        improved = True
+                        new_conf = _score_conference_conflicts(slots)
+                        if new_conf > old_conf:
+                            # Undo — swap worsens conference conflicts
+                            a["region"], b["region"] = b["region"], a["region"]
+                        else:
+                            improved = True
 
 
 # ---------------------------------------------------------------------------
