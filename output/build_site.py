@@ -2464,6 +2464,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-sim:checked ~ .tab-nav .tab-bar label[for="tab-sim"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-stats:checked ~ .tab-nav .tab-bar label[for="tab-stats"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
@@ -2512,6 +2516,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         #tab-summary:checked ~ #panel-summary {{ display: block; }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
         #tab-official:checked ~ #panel-official {{ display: block; }}
+        #tab-sim:checked ~ #panel-sim {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
         #tab-conf:checked ~ #panel-conf {{ display: block; }}
@@ -4184,6 +4189,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
+        <input type="radio" name="tabs" id="tab-sim" class="tab-radio">
         <input type="radio" name="tabs" id="tab-official" class="tab-radio">
         <input type="radio" name="tabs" id="tab-bracket" class="tab-radio">
         <input type="radio" name="tabs" id="tab-stats" class="tab-radio">
@@ -4203,6 +4209,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <div class="tab-bar">
                 <label for="tab-summary">Summary</label>
                 <label for="tab-official">Official Bracket</label>
+                <label for="tab-sim">Simulator</label>
                 <label for="tab-bracket">Bracket Prediction</label>
                 <label for="tab-bubble">Bubble Watch</label>
                 <label for="tab-schedule">Schedule</label>
@@ -4408,6 +4415,25 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.5rem;">
                 43/68 exact seed matches. Maximum miss was 2 seed lines (Vanderbilt, NC State, Utah State). Every team within 2 seeds of actual placement.
             </p>
+        </div>
+
+        <div id="panel-sim" class="tab-panel">
+            <h2>Tournament Simulator</h2>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: -0.5rem; margin-bottom: 1rem;">
+                Monte Carlo simulation of the official 2026 bracket using KenPom-style efficiency model. Each game outcome is determined probabilistically based on adjusted offensive/defensive efficiency and tempo.
+            </p>
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <label style="font-size: 0.85rem;">Simulations:
+                    <select id="sim-count" style="padding: 0.3rem 0.5rem; font-family: inherit; font-size: 0.85rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px;">
+                        <option value="1000">1,000</option>
+                        <option value="10000" selected>10,000</option>
+                        <option value="50000">50,000</option>
+                    </select>
+                </label>
+                <button id="sim-run" style="padding: 0.45rem 1.2rem; font-family: inherit; font-size: 0.85rem; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer;">Run Simulation</button>
+                <span id="sim-status" style="font-size: 0.82rem; color: var(--text-muted);"></span>
+            </div>
+            <div id="sim-results"></div>
         </div>
 
         <div id="panel-bracket" class="tab-panel">
@@ -7746,6 +7772,228 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         input.addEventListener('keydown',function(e){{
             if(e.key==='Enter')send();
         }});
+    }})();
+
+    /* Tournament Simulator — Monte Carlo bracket simulation */
+    (function(){{
+        var btn=document.getElementById('sim-run');
+        var out=document.getElementById('sim-results');
+        var status=document.getElementById('sim-status');
+        if(!btn||!out)return;
+
+        /* Official bracket: [region][matchup_index] = [highSeed, highTeam, lowSeed, lowTeam] */
+        var BRACKET={{
+            "East":[
+                [1,"Duke",16,"Siena"],
+                [8,"Ohio State",9,"TCU"],
+                [5,"St. John's (NY)",12,"Northern Iowa"],
+                [4,"Kansas",13,"California Baptist"],
+                [6,"Louisville",11,"South Florida"],
+                [3,"Michigan State",14,"North Dakota State"],
+                [7,"UCLA",10,"UCF"],
+                [2,"Connecticut",15,"Furman"]
+            ],
+            "West":[
+                [1,"Arizona",16,"Long Island University"],
+                [8,"Villanova",9,"Utah State"],
+                [5,"Wisconsin",12,"High Point"],
+                [4,"Arkansas",13,"Hawaii"],
+                [6,"Brigham Young",11,"SMU_MiamiOH"],
+                [3,"Gonzaga",14,"Kennesaw State"],
+                [7,"Miami (FL)",10,"Missouri"],
+                [2,"Purdue",15,"Queens (NC)"]
+            ],
+            "South":[
+                [1,"Florida",16,"Lehigh_PrairieView"],
+                [8,"Clemson",9,"Iowa"],
+                [5,"Vanderbilt",12,"McNeese State"],
+                [4,"Nebraska",13,"Troy"],
+                [6,"North Carolina",11,"Virginia Commonwealth"],
+                [3,"Illinois",14,"Pennsylvania"],
+                [7,"Saint Mary's (CA)",10,"Texas A&M"],
+                [2,"Houston",15,"Idaho"]
+            ],
+            "Midwest":[
+                [1,"Michigan",16,"UMBC_Howard"],
+                [8,"Georgia",9,"Saint Louis"],
+                [5,"Texas Tech",12,"Akron"],
+                [4,"Alabama",13,"Hofstra"],
+                [6,"Tennessee",11,"NCState_Texas"],
+                [3,"Virginia",14,"Wright State"],
+                [7,"Kentucky",10,"Santa Clara"],
+                [2,"Iowa State",15,"Tennessee State"]
+            ]
+        }};
+
+        /* First Four play-in mappings: placeholder -> [teamA, teamB] */
+        var FIRST_FOUR={{
+            "SMU_MiamiOH":["Southern Methodist","Miami (OH)"],
+            "NCState_Texas":["NC State","Texas"],
+            "UMBC_Howard":["Maryland-Baltimore County","Howard"],
+            "Lehigh_PrairieView":["Lehigh","Prairie View"]
+        }};
+
+        var AVG_EFF=97.5, AVG_TEMPO=67.5;
+
+        function findTeam(name){{
+            if(!window.__SCORES_TEAMS__)return null;
+            var teams=window.__SCORES_TEAMS__;
+            for(var i=0;i<teams.length;i++){{
+                if(teams[i].name===name)return teams[i];
+            }}
+            return null;
+        }}
+
+        function winProb(a,b){{
+            /* KenPom additive efficiency model, neutral court */
+            var oeA=a.oe||AVG_EFF, deA=a.de||AVG_EFF;
+            var oeB=b.oe||AVG_EFF, deB=b.de||AVG_EFF;
+            var paceA=a.pace||AVG_TEMPO, paceB=b.pace||AVG_TEMPO;
+            var poss=(paceA*paceB)/AVG_TEMPO;
+            var rawA=(oeA+deB-AVG_EFF)*poss/100;
+            var rawB=(oeB+deA-AVG_EFF)*poss/100;
+            var spread=rawA-rawB;
+            return 1/(1+Math.pow(10,-spread/13));
+        }}
+
+        function simGame(a,b){{
+            var p=winProb(a,b);
+            return Math.random()<p?a:b;
+        }}
+
+        function resolveTeam(name){{
+            if(FIRST_FOUR[name]){{
+                var pair=FIRST_FOUR[name];
+                var tA=findTeam(pair[0]), tB=findTeam(pair[1]);
+                if(tA&&tB)return simGame(tA,tB);
+                return tA||tB||{{name:pair[0],oe:AVG_EFF,de:AVG_EFF,pace:AVG_TEMPO}};
+            }}
+            var t=findTeam(name);
+            return t||{{name:name,oe:AVG_EFF,de:AVG_EFF,pace:AVG_TEMPO}};
+        }}
+
+        function simRegion(matchups){{
+            /* Round of 32 */
+            var r32=[];
+            for(var i=0;i<matchups.length;i++){{
+                var m=matchups[i];
+                var a=resolveTeam(m[1]), b=resolveTeam(m[3]);
+                r32.push(simGame(a,b));
+            }}
+            /* Sweet 16: 0v1, 2v3, 4v5, 6v7 */
+            var s16=[simGame(r32[0],r32[1]),simGame(r32[2],r32[3]),simGame(r32[4],r32[5]),simGame(r32[6],r32[7])];
+            /* Elite 8 */
+            var e8=[simGame(s16[0],s16[1]),simGame(s16[2],s16[3])];
+            /* Regional final */
+            return simGame(e8[0],e8[1]);
+        }}
+
+        function runSim(){{
+            var N=parseInt(document.getElementById('sim-count').value)||10000;
+            btn.disabled=true;
+            status.textContent='Running '+N.toLocaleString()+' simulations...';
+
+            setTimeout(function(){{
+                var champ={{}}, f4={{}}, e8={{}}, s16={{}}, r32={{}};
+                var regions=["East","West","South","Midwest"];
+
+                for(var s=0;s<N;s++){{
+                    var ff=[];
+                    for(var ri=0;ri<4;ri++){{
+                        var reg=regions[ri];
+                        var matchups=BRACKET[reg];
+
+                        /* First round */
+                        var winners=[];
+                        for(var i=0;i<matchups.length;i++){{
+                            var m=matchups[i];
+                            var a=resolveTeam(m[1]), b=resolveTeam(m[3]);
+                            var w=simGame(a,b);
+                            winners.push(w);
+                            r32[w.name]=(r32[w.name]||0)+1;
+                        }}
+
+                        /* Sweet 16 */
+                        var s16w=[];
+                        for(var i=0;i<4;i++){{
+                            var w=simGame(winners[i*2],winners[i*2+1]);
+                            s16w.push(w);
+                            s16[w.name]=(s16[w.name]||0)+1;
+                        }}
+
+                        /* Elite 8 */
+                        var e8w=[simGame(s16w[0],s16w[1]),simGame(s16w[2],s16w[3])];
+                        e8[e8w[0].name]=(e8[e8w[0].name]||0)+1;
+                        e8[e8w[1].name]=(e8[e8w[1].name]||0)+1;
+
+                        /* Regional final */
+                        var regWinner=simGame(e8w[0],e8w[1]);
+                        f4[regWinner.name]=(f4[regWinner.name]||0)+1;
+                        ff.push(regWinner);
+                    }}
+
+                    /* Final Four */
+                    var sem1=simGame(ff[0],ff[1]);
+                    var sem2=simGame(ff[2],ff[3]);
+                    var champion=simGame(sem1,sem2);
+                    champ[champion.name]=(champ[champion.name]||0)+1;
+                }}
+
+                /* Sort results */
+                function sortObj(obj){{
+                    return Object.entries(obj).sort(function(a,b){{return b[1]-a[1];}});
+                }}
+
+                var champSorted=sortObj(champ);
+                var f4Sorted=sortObj(f4);
+                var e8Sorted=sortObj(e8);
+                var s16Sorted=sortObj(s16);
+
+                function pct(v){{return (v/N*100).toFixed(1);}}
+                function barColor(v){{
+                    var p=v/N;
+                    if(p>0.15)return 'var(--accent)';
+                    if(p>0.05)return 'var(--green)';
+                    return 'var(--text-muted)';
+                }}
+
+                function buildTable(title,data,limit){{
+                    var html='<h3 style="margin-top:1.5rem;">'+title+'</h3>';
+                    html+='<table class="seed-table" style="font-size:0.85rem;"><thead><tr><th style="width:2.5rem;">#</th><th>Team</th><th style="width:4.5rem;text-align:right;">Prob</th><th style="width:40%;"><!-- bar --></th></tr></thead><tbody>';
+                    var top=Math.min(limit||data.length,data.length);
+                    var maxVal=data[0]?data[0][1]:1;
+                    for(var i=0;i<top;i++){{
+                        var name=data[i][0], val=data[i][1];
+                        var w=(val/maxVal*100).toFixed(0);
+                        html+='<tr><td style="text-align:center;color:var(--text-muted);">'+(i+1)+'</td>';
+                        html+='<td><span class="stats-team" data-team="'+name+'">'+name+'</span></td>';
+                        html+='<td style="text-align:right;font-weight:600;">'+pct(val)+'%</td>';
+                        html+='<td><div style="background:'+barColor(val)+';height:8px;border-radius:4px;width:'+w+'%;opacity:0.7;"></div></td></tr>';
+                    }}
+                    html+='</tbody></table>';
+                    return html;
+                }}
+
+                var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:1rem;">';
+                html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:1.6rem;font-weight:700;color:var(--accent);">'+champSorted[0][0]+'</div><div style="font-size:0.82rem;color:var(--text-muted);">Most Likely Champion</div><div style="font-size:1.2rem;font-weight:600;">'+pct(champSorted[0][1])+'%</div></div>';
+                html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:2rem;font-weight:700;color:var(--accent);">'+N.toLocaleString()+'</div><div style="font-size:0.82rem;color:var(--text-muted);">Simulations Run</div></div>';
+                html+='</div>';
+
+                html+=buildTable('National Champion',champSorted,20);
+                html+=buildTable('Final Four',f4Sorted,20);
+                html+=buildTable('Elite 8',e8Sorted,25);
+                html+=buildTable('Sweet 16',s16Sorted,32);
+
+                out.innerHTML=html;
+                status.textContent='Completed '+N.toLocaleString()+' simulations.';
+                btn.disabled=false;
+
+                /* Re-bind team profile clicks */
+                if(window.__bindTeamClicks)window.__bindTeamClicks();
+            }},50);
+        }}
+
+        btn.addEventListener('click',runSim);
     }})();
     </script>
 </body>
