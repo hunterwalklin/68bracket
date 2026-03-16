@@ -2378,6 +2378,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-official:checked ~ .tab-nav .tab-bar label[for="tab-official"] {{
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }}
         #tab-stats:checked ~ .tab-nav .tab-bar label[for="tab-stats"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
@@ -2425,6 +2429,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         }}
         #tab-summary:checked ~ #panel-summary {{ display: block; }}
         #tab-bracket:checked ~ #panel-bracket {{ display: block; }}
+        #tab-official:checked ~ #panel-official {{ display: block; }}
         #tab-stats:checked ~ #panel-stats {{ display: block; }}
         #tab-bubble:checked ~ #panel-bubble {{ display: block; }}
         #tab-conf:checked ~ #panel-conf {{ display: block; }}
@@ -4097,6 +4102,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         </header>
 
         <input type="radio" name="tabs" id="tab-summary" class="tab-radio" checked>
+        <input type="radio" name="tabs" id="tab-official" class="tab-radio">
         <input type="radio" name="tabs" id="tab-bracket" class="tab-radio">
         <input type="radio" name="tabs" id="tab-stats" class="tab-radio">
         <input type="radio" name="tabs" id="tab-bubble" class="tab-radio">
@@ -4114,7 +4120,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div class="tab-nav">
             <div class="tab-bar">
                 <label for="tab-summary">Summary</label>
-                <label for="tab-bracket">Bracket</label>
+                <label for="tab-official">Official Bracket</label>
+                <label for="tab-bracket">Bracket Prediction</label>
                 <label for="tab-bubble">Bubble Watch</label>
                 <label for="tab-schedule">Schedule</label>
                 <label for="tab-standings">Standings</label>
@@ -4138,6 +4145,166 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-summary" class="tab-panel">
             <h2>Daily Summary</h2>
             {summary_tab_html if summary_tab_html else '<p style="color: var(--text-muted);">Summary data not available. Run the predict command to generate.</p>'}
+        </div>
+
+        <div id="panel-official" class="tab-panel">
+            <h2>Official 2026 NCAA Tournament Bracket</h2>
+
+            <h3>First Four</h3>
+            <ul class="first-four-list">
+                <li>(11) NC State vs Texas — Mar 17</li>
+                <li>(16) UMBC vs Howard — Mar 17</li>
+                <li>(11) SMU vs Miami (OH) — Mar 18</li>
+                <li>(16) Lehigh vs Prairie View — Mar 18</li>
+            </ul>
+
+            <h3>Regional Brackets</h3>
+            <div class="brackets-grid">
+                <div class="region-bracket">
+                    <pre class="bracket-art">
+                              EAST REGION
+
+(1) Duke ────────────────────────┐
+                                 ├──────────────┐
+(16) Siena ──────────────────────┘              │
+                                                ├──────────────┐
+(8) Ohio State ──────────────────┐              │              │
+                                 ├──────────────┘              │
+(9) TCU ─────────────────────────┘                             │
+                                                               ├── East
+(5) St. John's ──────────────────┐                             │
+                                 ├──────────────┐              │
+(12) Northern Iowa ──────────────┘              │              │
+                                                ├──────────────┘
+(4) Kansas ──────────────────────┐              │
+                                 ├──────────────┘
+(13) California Baptist ─────────┘
+
+(6) Louisville ──────────────────┐
+                                 ├──────────────┐
+(11) South Florida ──────────────┘              │
+                                                ├──────────────┐
+(3) Michigan State ──────────────┐              │              │
+                                 ├──────────────┘              │
+(14) North Dakota State ─────────┘                             │
+                                                               ├── East
+(7) UCLA ────────────────────────┐                             │
+                                 ├──────────────┐              │
+(10) UCF ────────────────────────┘              │              │
+                                                ├──────────────┘
+(2) UConn ───────────────────────┐              │
+                                 ├──────────────┘
+(15) Furman ─────────────────────┘</pre>
+                </div>
+                <div class="region-bracket">
+                    <pre class="bracket-art">
+                              WEST REGION
+
+(1) Arizona ─────────────────┐
+                             ├──────────────┐
+(16) Long Island University ─┘              │
+                                            ├──────────────┐
+(8) Villanova ───────────────┐              │              │
+                             ├──────────────┘              │
+(9) Utah State ──────────────┘                             │
+                                                           ├── West
+(5) Wisconsin ───────────────┐                             │
+                             ├──────────────┐              │
+(12) High Point ─────────────┘              │              │
+                                            ├──────────────┘
+(4) Arkansas ────────────────┐              │
+                             ├──────────────┘
+(13) Hawaii ─────────────────┘
+
+(6) BYU ─────────────────────┐
+                             ├──────────────┐
+(11) SMU/Miami (OH) ─────────┘              │
+                                            ├──────────────┐
+(3) Gonzaga ─────────────────┐              │              │
+                             ├──────────────┘              │
+(14) Kennesaw State ─────────┘                             │
+                                                           ├── West
+(7) Miami (FL) ──────────────┐                             │
+                             ├──────────────┐              │
+(10) Missouri ───────────────┘              │              │
+                                            ├──────────────┘
+(2) Purdue ──────────────────┐              │
+                             ├──────────────┘
+(15) Queens (NC) ────────────┘</pre>
+                </div>
+                <div class="region-bracket">
+                    <pre class="bracket-art">
+                              SOUTH REGION
+
+(1) Florida ─────────────────────┐
+                                 ├──────────────┐
+(16) Lehigh/Prairie View ────────┘              │
+                                                ├──────────────┐
+(8) Clemson ─────────────────────┐              │              │
+                                 ├──────────────┘              │
+(9) Iowa ────────────────────────┘                             │
+                                                               ├── South
+(5) Vanderbilt ──────────────────┐                             │
+                                 ├──────────────┐              │
+(12) McNeese State ──────────────┘              │              │
+                                                ├──────────────┘
+(4) Nebraska ────────────────────┐              │
+                                 ├──────────────┘
+(13) Troy ───────────────────────┘
+
+(6) North Carolina ──────────────┐
+                                 ├──────────────┐
+(11) VCU ────────────────────────┘              │
+                                                ├──────────────┐
+(3) Illinois ────────────────────┐              │              │
+                                 ├──────────────┘              │
+(14) Pennsylvania ───────────────┘                             │
+                                                               ├── South
+(7) Saint Mary's ────────────────┐                             │
+                                 ├──────────────┐              │
+(10) Texas A&M ──────────────────┘              │              │
+                                                ├──────────────┘
+(2) Houston ─────────────────────┐              │
+                                 ├──────────────┘
+(15) Idaho ──────────────────────┘</pre>
+                </div>
+                <div class="region-bracket">
+                    <pre class="bracket-art">
+                            MIDWEST REGION
+
+(1) Michigan ────────────────┐
+                             ├──────────────┐
+(16) UMBC/Howard ────────────┘              │
+                                            ├──────────────┐
+(8) Georgia ─────────────────┐              │              │
+                             ├──────────────┘              │
+(9) Saint Louis ─────────────┘                             │
+                                                           ├── Midwest
+(5) Texas Tech ──────────────┐                             │
+                             ├──────────────┐              │
+(12) Akron ──────────────────┘              │              │
+                                            ├──────────────┘
+(4) Alabama ─────────────────┐              │
+                             ├──────────────┘
+(13) Hofstra ────────────────┘
+
+(6) Tennessee ───────────────┐
+                             ├──────────────┐
+(11) NC State/Texas ─────────┘              │
+                                            ├──────────────┐
+(3) Virginia ────────────────┐              │              │
+                             ├──────────────┘              │
+(14) Wright State ───────────┘                             │
+                                                           ├── Midwest
+(7) Kentucky ────────────────┐                             │
+                             ├──────────────┐              │
+(10) Santa Clara ────────────┘              │              │
+                                            ├──────────────┘
+(2) Iowa State ──────────────┐              │
+                             ├──────────────┘
+(15) Tennessee State ────────┘</pre>
+                </div>
+            </div>
         </div>
 
         <div id="panel-bracket" class="tab-panel">
