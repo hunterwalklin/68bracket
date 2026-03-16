@@ -4231,85 +4231,132 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         <div id="panel-official" class="tab-panel">
             <h2>Official 2026 NCAA Tournament Bracket</h2>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: -0.5rem;">Final Four: San Antonio, TX</p>
 
-            <h3>First Four — Dayton, OH</h3>
-            <div class="official-ff">
-                <div class="ff-card">
-                    <span class="ff-date">Mar 17</span>
-                    <span class="ff-seed">(11)</span> NC State <span class="ff-vs">vs</span> Texas
+            <details class="ct-conf" open>
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">First Four</span>
+                    <span class="ct-badge ct-badge-upcoming">Dayton, OH</span>
+                </summary>
+                <div class="ct-round-header">Tuesday, March 17</div>
+                <div class="ct-game-row">
+                    <div class="ct-game-teams">
+                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">NC State</span></div>
+                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">Texas</span></div>
+                    </div>
+                    <div class="ct-game-center"><span class="ct-game-time">6:40 PM ET</span><br><span class="ct-game-pred">Winner &rarr; Midwest</span></div>
                 </div>
-                <div class="ff-card">
-                    <span class="ff-date">Mar 17</span>
-                    <span class="ff-seed">(16)</span> UMBC <span class="ff-vs">vs</span> Howard
+                <div class="ct-game-row">
+                    <div class="ct-game-teams">
+                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">UMBC</span></div>
+                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Howard</span></div>
+                    </div>
+                    <div class="ct-game-center"><span class="ct-game-time">9:10 PM ET</span><br><span class="ct-game-pred">Winner &rarr; Midwest</span></div>
                 </div>
-                <div class="ff-card">
-                    <span class="ff-date">Mar 18</span>
-                    <span class="ff-seed">(11)</span> SMU <span class="ff-vs">vs</span> Miami (OH)
+                <div class="ct-round-header">Wednesday, March 18</div>
+                <div class="ct-game-row">
+                    <div class="ct-game-teams">
+                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">SMU</span></div>
+                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">Miami (OH)</span></div>
+                    </div>
+                    <div class="ct-game-center"><span class="ct-game-time">6:40 PM ET</span><br><span class="ct-game-pred">Winner &rarr; West</span></div>
                 </div>
-                <div class="ff-card">
-                    <span class="ff-date">Mar 18</span>
-                    <span class="ff-seed">(16)</span> Lehigh <span class="ff-vs">vs</span> Prairie View
+                <div class="ct-game-row">
+                    <div class="ct-game-teams">
+                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Lehigh</span></div>
+                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Prairie View</span></div>
+                    </div>
+                    <div class="ct-game-center"><span class="ct-game-time">9:10 PM ET</span><br><span class="ct-game-pred">Winner &rarr; South</span></div>
                 </div>
-            </div>
+            </details>
 
-            <div class="official-regions">
-                <div class="official-region">
-                    <h3>East</h3>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Duke</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Siena</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Ohio State</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">TCU</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">St. John's</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">Northern Iowa</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Kansas</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">California Baptist</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">Louisville</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">South Florida</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Michigan State</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">North Dakota State</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">UCLA</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">UCF</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">UConn</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Furman</span></div></div>
-                </div>
-                <div class="official-region">
-                    <h3>West</h3>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Arizona</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Long Island</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Villanova</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Utah State</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Wisconsin</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">High Point</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Arkansas</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Hawaii</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">BYU</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">SMU / Miami (OH)</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Gonzaga</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Kennesaw State</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Miami (FL)</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Missouri</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Purdue</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Queens (NC)</span></div></div>
-                </div>
-                <div class="official-region">
-                    <h3>South</h3>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Florida</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Lehigh / Prairie View</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Clemson</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Iowa</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Vanderbilt</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">McNeese State</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Nebraska</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Troy</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">North Carolina</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">VCU</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Illinois</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Pennsylvania</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Saint Mary's</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Texas A&M</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Houston</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Idaho</span></div></div>
-                </div>
-                <div class="official-region">
-                    <h3>Midwest</h3>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Michigan</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">UMBC / Howard</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Georgia</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Saint Louis</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Texas Tech</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">Akron</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Alabama</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Hofstra</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">Tennessee</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">NC State / Texas</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Virginia</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Wright State</span></div></div>
-                    <div class="matchup-divider"></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Kentucky</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Santa Clara</span></div></div>
-                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Iowa State</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Tennessee State</span></div></div>
-                </div>
-            </div>
+            <details class="ct-conf" open>
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">East Region</span>
+                    <span class="ct-badge ct-badge-upcoming">Regional: Newark, NJ</span>
+                </summary>
+                <div class="ct-bracket-info">First/Second Round: Pittsburgh, PA &amp; Newark, NJ</div>
+                <div class="ct-round-header">First Round — Thursday, March 19 / Saturday, March 21</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Duke</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Siena</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Ohio State</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">TCU</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">St. John's</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">Northern Iowa</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Kansas</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">California Baptist</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">Louisville</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">South Florida</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Michigan State</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">North Dakota State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">UCLA</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">UCF</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">UConn</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Furman</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
+                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 26 &amp; 28</div>
+                <div class="ct-bracket-info">Newark, NJ</div>
+            </details>
+
+            <details class="ct-conf" open>
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">West Region</span>
+                    <span class="ct-badge ct-badge-upcoming">Regional: San Francisco, CA</span>
+                </summary>
+                <div class="ct-bracket-info">First/Second Round: Denver, CO &amp; Salt Lake City, UT</div>
+                <div class="ct-round-header">First Round — Thursday, March 19 / Saturday, March 21</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Arizona</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Long Island</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Villanova</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Utah State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Wisconsin</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">High Point</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Arkansas</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Hawaii</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">BYU</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">SMU / Miami (OH)</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Gonzaga</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Kennesaw State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Miami (FL)</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Missouri</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Purdue</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Queens (NC)</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
+                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 27 &amp; 29</div>
+                <div class="ct-bracket-info">San Francisco, CA</div>
+            </details>
+
+            <details class="ct-conf" open>
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">South Region</span>
+                    <span class="ct-badge ct-badge-upcoming">Regional: Atlanta, GA</span>
+                </summary>
+                <div class="ct-bracket-info">First/Second Round: Charlotte, NC &amp; Raleigh, NC</div>
+                <div class="ct-round-header">First Round — Friday, March 20 / Sunday, March 22</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Florida</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Lehigh / Prairie View</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Clemson</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Iowa</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Vanderbilt</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">McNeese State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Nebraska</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Troy</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">North Carolina</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">VCU</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Illinois</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Pennsylvania</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Saint Mary's</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Texas A&amp;M</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Houston</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Idaho</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
+                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 27 &amp; 29</div>
+                <div class="ct-bracket-info">Atlanta, GA</div>
+            </details>
+
+            <details class="ct-conf" open>
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">Midwest Region</span>
+                    <span class="ct-badge ct-badge-upcoming">Regional: Indianapolis, IN</span>
+                </summary>
+                <div class="ct-bracket-info">First/Second Round: Indianapolis, IN &amp; Cleveland, OH</div>
+                <div class="ct-round-header">First Round — Friday, March 20 / Sunday, March 22</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Michigan</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">UMBC / Howard</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Georgia</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Saint Louis</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Texas Tech</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">Akron</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Alabama</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Hofstra</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">Tennessee</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">NC State / Texas</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Virginia</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Wright State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Kentucky</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Santa Clara</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Iowa State</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Tennessee State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
+                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 26 &amp; 28</div>
+                <div class="ct-bracket-info">Indianapolis, IN</div>
+            </details>
+
+            <details class="ct-conf">
+                <summary class="ct-conf-summary">
+                    <span class="ct-conf-name">Final Four</span>
+                    <span class="ct-badge ct-badge-upcoming">San Antonio, TX</span>
+                </summary>
+                <div class="ct-round-header">National Semifinals — Saturday, April 4</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">East Champion</span></div><div class="ct-game-team"><span class="ct-team-name">West Champion</span></div></div><div class="ct-game-center"><span class="ct-game-time">6:09 PM ET</span></div></div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">South Champion</span></div><div class="ct-game-team"><span class="ct-team-name">Midwest Champion</span></div></div><div class="ct-game-center"><span class="ct-game-time">8:49 PM ET</span></div></div>
+                <div class="ct-round-header">National Championship — Monday, April 6</div>
+                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">Semifinal 1 Winner</span></div><div class="ct-game-team"><span class="ct-team-name">Semifinal 2 Winner</span></div></div><div class="ct-game-center"><span class="ct-game-time">9:20 PM ET</span></div></div>
+            </details>
 
             <h2>Prediction vs Official</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
