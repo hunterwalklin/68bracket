@@ -7776,10 +7776,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
     /* Tournament Simulator — Monte Carlo bracket simulation */
     (function(){{
-        var btn=document.getElementById('sim-run');
-        var out=document.getElementById('sim-results');
-        var status=document.getElementById('sim-status');
-        if(!btn||!out)return;
+        var simBtn=document.getElementById('sim-run');
+        var simOut=document.getElementById('sim-results');
+        var simStatus=document.getElementById('sim-status');
+        if(!simBtn||!simOut)return;
 
         /* Official bracket: [region][matchup_index] = [highSeed, highTeam, lowSeed, lowTeam] */
         var BRACKET={{
@@ -7890,10 +7890,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function runSim(){{
             var N=parseInt(document.getElementById('sim-count').value)||10000;
-            btn.disabled=true;
-            status.textContent='Running '+N.toLocaleString()+' simulations...';
+            simBtn.disabled=true;
+            simStatus.textContent='Running '+N.toLocaleString()+' simulations...';
 
-            setTimeout(function(){{
+            setTimeout(function(){{ try{{
                 var champ={{}}, f4={{}}, e8={{}}, s16={{}}, r32={{}};
                 var regions=["East","West","South","Midwest"];
 
@@ -7984,16 +7984,19 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 html+=buildTable('Elite 8',e8Sorted,25);
                 html+=buildTable('Sweet 16',s16Sorted,32);
 
-                out.innerHTML=html;
-                status.textContent='Completed '+N.toLocaleString()+' simulations.';
-                btn.disabled=false;
+                simOut.innerHTML=html;
+                simStatus.textContent='Completed '+N.toLocaleString()+' simulations.';
+                simBtn.disabled=false;
 
                 /* Re-bind team profile clicks */
                 if(window.__bindTeamClicks)window.__bindTeamClicks();
+            }}catch(e){{ simStatus.textContent='Error: '+e.message; simBtn.disabled=false; console.error(e); }}
             }},50);
         }}
 
-        btn.addEventListener('click',runSim);
+        simBtn.addEventListener('click',function(){{
+            try{{ runSim(); }}catch(e){{ simStatus.textContent='Error: '+e.message; simBtn.disabled=false; console.error(e); }}
+        }});
     }})();
     </script>
 </body>
