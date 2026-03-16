@@ -1333,14 +1333,45 @@ def _build_summary_tab(stats_df: pd.DataFrame, changes: dict, bubble: dict | Non
     changes_blob = _json.dumps(changes or {}, separators=(",", ":"))
     bubble_blob = _json.dumps(bubble or {}, separators=(",", ":"))
 
-    # Build seed lookup: team_name -> seed_number
+    # Build seed lookup from official bracket (actual seeds, not predicted)
+    _OFFICIAL_BRACKET = {
+        "East": [
+            (1, "Duke"), (16, "Siena"), (8, "Ohio State"), (9, "TCU"),
+            (5, "St. John's (NY)"), (12, "Northern Iowa"), (4, "Kansas"), (13, "California Baptist"),
+            (6, "Louisville"), (11, "South Florida"), (3, "Michigan State"), (14, "North Dakota State"),
+            (7, "UCLA"), (10, "UCF"), (2, "Connecticut"), (15, "Furman"),
+        ],
+        "West": [
+            (1, "Arizona"), (16, "Long Island University"), (8, "Villanova"), (9, "Utah State"),
+            (5, "Wisconsin"), (12, "High Point"), (4, "Arkansas"), (13, "Hawaii"),
+            (6, "Brigham Young"), (3, "Gonzaga"), (14, "Kennesaw State"),
+            (7, "Miami (FL)"), (10, "Missouri"), (2, "Purdue"), (15, "Queens (NC)"),
+        ],
+        "South": [
+            (1, "Florida"), (8, "Clemson"), (9, "Iowa"),
+            (5, "Vanderbilt"), (12, "McNeese State"), (4, "Nebraska"), (13, "Troy"),
+            (6, "North Carolina"), (11, "Virginia Commonwealth"), (3, "Illinois"), (14, "Pennsylvania"),
+            (7, "Saint Mary's (CA)"), (10, "Texas A&M"), (2, "Houston"), (15, "Idaho"),
+        ],
+        "Midwest": [
+            (1, "Michigan"), (8, "Georgia"), (9, "Saint Louis"),
+            (5, "Texas Tech"), (12, "Akron"), (4, "Alabama"), (13, "Hofstra"),
+            (6, "Tennessee"), (3, "Virginia"), (14, "Wright State"),
+            (7, "Kentucky"), (10, "Santa Clara"), (2, "Iowa State"), (15, "Tennessee State"),
+        ],
+    }
+    # First Four teams (all share the seed of their play-in slot)
+    _FIRST_FOUR = {
+        11: ["Southern Methodist", "Miami (OH)", "NC State", "Texas"],
+        16: ["Maryland-Baltimore County", "Howard", "Lehigh", "Prairie View"],
+    }
     seed_lookup = {}
-    if seed_rows:
-        for seed_num, teams_str in seed_rows:
-            for team in teams_str.split(", "):
-                team = team.strip().rstrip("*")
-                if team:
-                    seed_lookup[team] = int(seed_num)
+    for region_teams in _OFFICIAL_BRACKET.values():
+        for seed_num, team in region_teams:
+            seed_lookup[team] = seed_num
+    for seed_num, ff_teams in _FIRST_FOUR.items():
+        for team in ff_teams:
+            seed_lookup[team] = seed_num
     seed_blob = _json.dumps(seed_lookup, separators=(",", ":"))
 
     return (
@@ -1868,7 +1899,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
     _chat_lines.append("")
     _chat_lines.append("=== REGIONAL BRACKETS ===")
     for region_name, region_text in brackets:
-        _chat_lines.append(f"\n{region_name} Region:")
+        _chat_lines.append("")
+        _chat_lines.append(f"{region_name} Region:")
         # Extract matchups from bracket text
         matchups = re.findall(r"\((\d+)\)\s+(.+?)(?:\s[─┐┘├┤┼]|$)", region_text)
         for seed, team in matchups:
@@ -2468,10 +2500,6 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
-        #tab-stats:checked ~ .tab-nav .tab-bar label[for="tab-stats"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
         #tab-bubble:checked ~ .tab-nav .tab-bar label[for="tab-bubble"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
@@ -2484,6 +2512,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
+        #tab-standings:checked ~ .tab-nav .tab-bar label[for="tab-standings"],
+        #tab-stats:checked ~ .tab-nav .tab-bar label[for="tab-stats"],
         #tab-scores:checked ~ .tab-nav .tab-bar label[for="tab-scores"],
         #tab-homecourt:checked ~ .tab-nav .tab-bar label[for="tab-homecourt"],
         #tab-autobid:checked ~ .tab-nav .tab-bar label[for="tab-autobid"],
@@ -2492,6 +2522,8 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             color: var(--accent);
             font-weight: 700;
         }}
+        #tab-standings:checked ~ .tab-nav .tab-more-btn,
+        #tab-stats:checked ~ .tab-nav .tab-more-btn,
         #tab-scores:checked ~ .tab-nav .tab-more-btn,
         #tab-homecourt:checked ~ .tab-nav .tab-more-btn,
         #tab-autobid:checked ~ .tab-nav .tab-more-btn,
@@ -2502,10 +2534,6 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             margin-bottom: -2px;
         }}
         #tab-schedule:checked ~ .tab-nav .tab-bar label[for="tab-schedule"] {{
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }}
-        #tab-standings:checked ~ .tab-nav .tab-bar label[for="tab-standings"] {{
             color: var(--accent);
             border-bottom-color: var(--accent);
         }}
@@ -3007,6 +3035,114 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             .ct-game-center {{
                 min-width: 70px;
                 font-size: 0.75rem;
+            }}
+        }}
+        /* Official bracket full-tournament layout */
+        .ob-wrap {{
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 1rem 0;
+        }}
+        .ob-full {{
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0;
+            align-items: center;
+            min-width: 980px;
+            padding: 0.5rem 0;
+        }}
+        .ob-wing {{
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }}
+        .ob-center {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 0 0.25rem;
+        }}
+        .ob-region-label {{
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.15rem;
+            text-align: center;
+        }}
+        .ob-region-sub {{
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-bottom: 0.25rem;
+        }}
+        .ob-center-label {{
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }}
+        .ob-champ {{
+            border: 2px solid var(--accent) !important;
+        }}
+        /* Right wing: mirror the bracket direction */
+        .ob-right .ct-bracket {{
+            flex-direction: row-reverse;
+        }}
+        .ob-right .ct-conn-top {{
+            border-right: none;
+            border-left: 1px solid var(--border);
+        }}
+        .ob-right .ct-conn-bot {{
+            border-right: none;
+            border-left: 1px solid var(--border);
+        }}
+        .ob-right .ct-slot {{
+            margin-left: auto;
+        }}
+        /* First Four compact row */
+        .ob-ff {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            justify-content: center;
+        }}
+        .ob-ff-game {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.78rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+            min-width: 10rem;
+        }}
+        .ob-ff-team {{
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }}
+        .ob-ff-seed {{
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            min-width: 1.1rem;
+            text-align: right;
+        }}
+        .ob-ff-dest {{
+            font-size: 0.65rem;
+            color: var(--accent);
+            text-align: center;
+            margin-top: 0.1rem;
+        }}
+        @media (max-width: 600px) {{
+            .ob-full {{
+                min-width: 920px;
             }}
         }}
 
@@ -4213,15 +4349,15 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                 <label for="tab-bracket">Bracket Prediction</label>
                 <label for="tab-bubble">Bubble Watch</label>
                 <label for="tab-schedule">Schedule</label>
-                <label for="tab-standings">Standings</label>
                 <label for="tab-conftourney">Conf Tourneys</label>
                 <label for="tab-matrix">Bracket Matrix</label>
-                <label for="tab-stats">Team Stats</label>
                 <label for="tab-ranking">Power Rankings</label>
             </div>
             <div class="tab-more">
                 <button class="tab-more-btn" type="button">More &#9662;</button>
                 <div class="tab-more-menu">
+                    <label for="tab-standings">Standings</label>
+                    <label for="tab-stats">Team Stats</label>
                     <label for="tab-appoll">AP Poll</label>
                     <label for="tab-scores">Matchup Predictor</label>
                     <label for="tab-homecourt">Home Court</label>
@@ -4240,130 +4376,181 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             <h2>Official 2026 NCAA Tournament Bracket</h2>
             <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: -0.5rem;">Final Four: San Antonio, TX</p>
 
-            <details class="ct-conf" open>
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">First Four</span>
-                    <span class="ct-badge ct-badge-upcoming">Dayton, OH</span>
-                </summary>
-                <div class="ct-round-header">Tuesday, March 17</div>
-                <div class="ct-game-row">
-                    <div class="ct-game-teams">
-                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">NC State</span></div>
-                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">Texas</span></div>
-                    </div>
-                    <div class="ct-game-center"><span class="ct-game-time">6:40 PM ET</span><br><span class="ct-game-pred">Winner &rarr; Midwest</span></div>
-                </div>
-                <div class="ct-game-row">
-                    <div class="ct-game-teams">
-                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">UMBC</span></div>
-                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Howard</span></div>
-                    </div>
-                    <div class="ct-game-center"><span class="ct-game-time">9:10 PM ET</span><br><span class="ct-game-pred">Winner &rarr; Midwest</span></div>
-                </div>
-                <div class="ct-round-header">Wednesday, March 18</div>
-                <div class="ct-game-row">
-                    <div class="ct-game-teams">
-                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">SMU</span></div>
-                        <div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">Miami (OH)</span></div>
-                    </div>
-                    <div class="ct-game-center"><span class="ct-game-time">6:40 PM ET</span><br><span class="ct-game-pred">Winner &rarr; West</span></div>
-                </div>
-                <div class="ct-game-row">
-                    <div class="ct-game-teams">
-                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Lehigh</span></div>
-                        <div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Prairie View</span></div>
-                    </div>
-                    <div class="ct-game-center"><span class="ct-game-time">9:10 PM ET</span><br><span class="ct-game-pred">Winner &rarr; South</span></div>
-                </div>
-            </details>
+            <!-- First Four -->
+            <div class="ob-ff">
+                <div class="ob-ff-game"><div class="ob-ff-team"><span class="ob-ff-seed">11</span> NC State</div><div class="ob-ff-team"><span class="ob-ff-seed">11</span> Texas</div><div class="ob-ff-dest">&rarr; Midwest</div></div>
+                <div class="ob-ff-game"><div class="ob-ff-team"><span class="ob-ff-seed">16</span> UMBC</div><div class="ob-ff-team"><span class="ob-ff-seed">16</span> Howard</div><div class="ob-ff-dest">&rarr; Midwest</div></div>
+                <div class="ob-ff-game"><div class="ob-ff-team"><span class="ob-ff-seed">11</span> SMU</div><div class="ob-ff-team"><span class="ob-ff-seed">11</span> Miami (OH)</div><div class="ob-ff-dest">&rarr; West</div></div>
+                <div class="ob-ff-game"><div class="ob-ff-team"><span class="ob-ff-seed">16</span> Lehigh</div><div class="ob-ff-team"><span class="ob-ff-seed">16</span> Prairie View</div><div class="ob-ff-dest">&rarr; South</div></div>
+            </div>
 
-            <details class="ct-conf" open>
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">East Region</span>
-                    <span class="ct-badge ct-badge-upcoming">Regional: Newark, NJ</span>
-                </summary>
-                <div class="ct-bracket-info">First/Second Round: Pittsburgh, PA &amp; Newark, NJ</div>
-                <div class="ct-round-header">First Round — Thursday, March 19 / Saturday, March 21</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Duke</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Siena</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Ohio State</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">TCU</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">St. John's</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">Northern Iowa</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Kansas</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">California Baptist</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">Louisville</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">South Florida</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Michigan State</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">North Dakota State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Pittsburgh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">UCLA</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">UCF</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">UConn</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Furman</span></div></div><div class="ct-game-center"><span class="ct-game-time">Newark</span></div></div>
-                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 26 &amp; 28</div>
-                <div class="ct-bracket-info">Newark, NJ</div>
-            </details>
+            <div class="ob-wrap"><div class="ob-full">
 
-            <details class="ct-conf" open>
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">West Region</span>
-                    <span class="ct-badge ct-badge-upcoming">Regional: San Francisco, CA</span>
-                </summary>
-                <div class="ct-bracket-info">First/Second Round: Denver, CO &amp; Salt Lake City, UT</div>
-                <div class="ct-round-header">First Round — Thursday, March 19 / Saturday, March 21</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Arizona</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Long Island</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Villanova</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Utah State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Wisconsin</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">High Point</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Arkansas</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Hawaii</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">BYU</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">SMU / Miami (OH)</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Gonzaga</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Kennesaw State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Salt Lake City</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Miami (FL)</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Missouri</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Purdue</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Queens (NC)</span></div></div><div class="ct-game-center"><span class="ct-game-time">Denver</span></div></div>
-                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 27 &amp; 29</div>
-                <div class="ct-bracket-info">San Francisco, CA</div>
-            </details>
+            <!-- LEFT WING: East + South -->
+            <div class="ob-wing">
 
-            <details class="ct-conf" open>
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">South Region</span>
-                    <span class="ct-badge ct-badge-upcoming">Regional: Atlanta, GA</span>
-                </summary>
-                <div class="ct-bracket-info">First/Second Round: Charlotte, NC &amp; Raleigh, NC</div>
-                <div class="ct-round-header">First Round — Friday, March 20 / Sunday, March 22</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Florida</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">Lehigh / Prairie View</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Clemson</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Iowa</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Vanderbilt</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">McNeese State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Nebraska</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Troy</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">North Carolina</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">VCU</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Illinois</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Pennsylvania</span></div></div><div class="ct-game-center"><span class="ct-game-time">Raleigh</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Saint Mary's</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Texas A&amp;M</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Houston</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Idaho</span></div></div><div class="ct-game-center"><span class="ct-game-time">Charlotte</span></div></div>
-                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 27 &amp; 29</div>
-                <div class="ct-bracket-info">Atlanta, GA</div>
-            </details>
+            <!-- EAST -->
+            <div>
+            <div class="ob-region-label">East</div>
+            <div class="ob-region-sub">Newark, NJ</div>
+            <div class="ct-bracket">
+                <div class="ct-round"><div class="ct-round-label">1st Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Duke" data-t2="Siena" data-info="Thu 2:50 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">1</span><span class="ct-slot-name">Duke</span></div><div class="ct-slot-team"><span class="ct-slot-seed">16</span><span class="ct-slot-name">Siena</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Ohio State" data-t2="TCU" data-info="Thu 12:15 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">8</span><span class="ct-slot-name">Ohio State</span></div><div class="ct-slot-team"><span class="ct-slot-seed">9</span><span class="ct-slot-name">TCU</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="St. John's (NY)" data-t2="Northern Iowa" data-info="Fri 7:10 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">5</span><span class="ct-slot-name">St. John's</span></div><div class="ct-slot-team"><span class="ct-slot-seed">12</span><span class="ct-slot-name">N. Iowa</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Kansas" data-t2="California Baptist" data-info="Fri 9:45 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">4</span><span class="ct-slot-name">Kansas</span></div><div class="ct-slot-team"><span class="ct-slot-seed">13</span><span class="ct-slot-name">Cal Baptist</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Louisville" data-t2="South Florida" data-info="Thu 1:30 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">6</span><span class="ct-slot-name">Louisville</span></div><div class="ct-slot-team"><span class="ct-slot-seed">11</span><span class="ct-slot-name">S. Florida</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Michigan State" data-t2="North Dakota State" data-info="Thu 4:05 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">3</span><span class="ct-slot-name">Michigan St</span></div><div class="ct-slot-team"><span class="ct-slot-seed">14</span><span class="ct-slot-name">N. Dakota St</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="UCLA" data-t2="UCF" data-info="Fri 7:25 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">7</span><span class="ct-slot-name">UCLA</span></div><div class="ct-slot-team"><span class="ct-slot-seed">10</span><span class="ct-slot-name">UCF</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Connecticut" data-t2="Furman" data-info="Fri 10:00 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">2</span><span class="ct-slot-name">UConn</span></div><div class="ct-slot-team"><span class="ct-slot-seed">15</span><span class="ct-slot-name">Furman</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">2nd Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">1/16</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">8/9</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">5/12</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">4/13</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">6/11</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">3/14</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">7/10</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">2/15</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Sweet 16</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Elite 8</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+            </div></div>
 
-            <details class="ct-conf" open>
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">Midwest Region</span>
-                    <span class="ct-badge ct-badge-upcoming">Regional: Indianapolis, IN</span>
-                </summary>
-                <div class="ct-bracket-info">First/Second Round: Indianapolis, IN &amp; Cleveland, OH</div>
-                <div class="ct-round-header">First Round — Friday, March 20 / Sunday, March 22</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">1</span><span class="ct-team-name">Michigan</span></div><div class="ct-game-team"><span class="ct-seed-num">16</span><span class="ct-team-name">UMBC / Howard</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">8</span><span class="ct-team-name">Georgia</span></div><div class="ct-game-team"><span class="ct-seed-num">9</span><span class="ct-team-name">Saint Louis</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">5</span><span class="ct-team-name">Texas Tech</span></div><div class="ct-game-team"><span class="ct-seed-num">12</span><span class="ct-team-name">Akron</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">4</span><span class="ct-team-name">Alabama</span></div><div class="ct-game-team"><span class="ct-seed-num">13</span><span class="ct-team-name">Hofstra</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">6</span><span class="ct-team-name">Tennessee</span></div><div class="ct-game-team"><span class="ct-seed-num">11</span><span class="ct-team-name">NC State / Texas</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">3</span><span class="ct-team-name">Virginia</span></div><div class="ct-game-team"><span class="ct-seed-num">14</span><span class="ct-team-name">Wright State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Indianapolis</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">7</span><span class="ct-team-name">Kentucky</span></div><div class="ct-game-team"><span class="ct-seed-num">10</span><span class="ct-team-name">Santa Clara</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-seed-num">2</span><span class="ct-team-name">Iowa State</span></div><div class="ct-game-team"><span class="ct-seed-num">15</span><span class="ct-team-name">Tennessee State</span></div></div><div class="ct-game-center"><span class="ct-game-time">Cleveland</span></div></div>
-                <div class="ct-round-header">Sweet 16 &amp; Elite 8 — March 26 &amp; 28</div>
-                <div class="ct-bracket-info">Indianapolis, IN</div>
-            </details>
+            <!-- SOUTH -->
+            <div>
+            <div class="ob-region-label">South</div>
+            <div class="ob-region-sub">Atlanta, GA</div>
+            <div class="ct-bracket">
+                <div class="ct-round"><div class="ct-round-label">1st Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Florida" data-t2="Lehigh" data-info="Fri 9:25 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">1</span><span class="ct-slot-name">Florida</span></div><div class="ct-slot-team"><span class="ct-slot-seed">16</span><span class="ct-slot-name">LEH/PV</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Clemson" data-t2="Iowa" data-info="Fri 6:50 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">8</span><span class="ct-slot-name">Clemson</span></div><div class="ct-slot-team"><span class="ct-slot-seed">9</span><span class="ct-slot-name">Iowa</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Vanderbilt" data-t2="McNeese State" data-info="Thu 3:15 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">5</span><span class="ct-slot-name">Vanderbilt</span></div><div class="ct-slot-team"><span class="ct-slot-seed">12</span><span class="ct-slot-name">McNeese St</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Nebraska" data-t2="Troy" data-info="Thu 12:40 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">4</span><span class="ct-slot-name">Nebraska</span></div><div class="ct-slot-team"><span class="ct-slot-seed">13</span><span class="ct-slot-name">Troy</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="North Carolina" data-t2="Virginia Commonwealth" data-info="Thu 6:50 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">6</span><span class="ct-slot-name">UNC</span></div><div class="ct-slot-team"><span class="ct-slot-seed">11</span><span class="ct-slot-name">VCU</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Illinois" data-t2="Pennsylvania" data-info="Thu 9:25 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">3</span><span class="ct-slot-name">Illinois</span></div><div class="ct-slot-team"><span class="ct-slot-seed">14</span><span class="ct-slot-name">Penn</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Saint Mary's (CA)" data-t2="Texas A&amp;M" data-info="Thu 7:35 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">7</span><span class="ct-slot-name">Saint Mary's</span></div><div class="ct-slot-team"><span class="ct-slot-seed">10</span><span class="ct-slot-name">Texas A&amp;M</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Houston" data-t2="Idaho" data-info="Thu 10:10 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">2</span><span class="ct-slot-name">Houston</span></div><div class="ct-slot-team"><span class="ct-slot-seed">15</span><span class="ct-slot-name">Idaho</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">2nd Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">1/16</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">8/9</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">5/12</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">4/13</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">6/11</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">3/14</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">7/10</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">2/15</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Sweet 16</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Elite 8</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+            </div></div>
 
-            <details class="ct-conf">
-                <summary class="ct-conf-summary">
-                    <span class="ct-conf-name">Final Four</span>
-                    <span class="ct-badge ct-badge-upcoming">San Antonio, TX</span>
-                </summary>
-                <div class="ct-round-header">National Semifinals — Saturday, April 4</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">East Champion</span></div><div class="ct-game-team"><span class="ct-team-name">West Champion</span></div></div><div class="ct-game-center"><span class="ct-game-time">6:09 PM ET</span></div></div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">South Champion</span></div><div class="ct-game-team"><span class="ct-team-name">Midwest Champion</span></div></div><div class="ct-game-center"><span class="ct-game-time">8:49 PM ET</span></div></div>
-                <div class="ct-round-header">National Championship — Monday, April 6</div>
-                <div class="ct-game-row"><div class="ct-game-teams"><div class="ct-game-team"><span class="ct-team-name">Semifinal 1 Winner</span></div><div class="ct-game-team"><span class="ct-team-name">Semifinal 2 Winner</span></div></div><div class="ct-game-center"><span class="ct-game-time">9:20 PM ET</span></div></div>
-            </details>
+            </div><!-- /ob-wing left -->
+
+            <!-- CENTER: Final Four + Championship -->
+            <div class="ob-center">
+                <div class="ob-center-label">Final Four</div>
+                <div class="ct-slot"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">East Champ</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">West Champ</span></div></div>
+                <div class="ob-center-label">Championship</div>
+                <div class="ct-slot ob-champ"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">Semifinal 1</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">Semifinal 2</span></div></div>
+                <div class="ob-center-label">Final Four</div>
+                <div class="ct-slot"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">South Champ</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">Midwest Champ</span></div></div>
+            </div>
+
+            <!-- RIGHT WING: West + Midwest (mirrored) -->
+            <div class="ob-wing ob-right">
+
+            <!-- WEST -->
+            <div>
+            <div class="ob-region-label">West</div>
+            <div class="ob-region-sub">San Francisco, CA</div>
+            <div class="ct-bracket">
+                <div class="ct-round"><div class="ct-round-label">1st Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Arizona" data-t2="Long Island University" data-info="Fri 1:35 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">1</span><span class="ct-slot-name">Arizona</span></div><div class="ct-slot-team"><span class="ct-slot-seed">16</span><span class="ct-slot-name">Long Island</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Villanova" data-t2="Utah State" data-info="Fri 4:10 PM &middot; TNT"><div class="ct-slot-team"><span class="ct-slot-seed">8</span><span class="ct-slot-name">Villanova</span></div><div class="ct-slot-team"><span class="ct-slot-seed">9</span><span class="ct-slot-name">Utah State</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Wisconsin" data-t2="High Point" data-info="Thu 1:50 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">5</span><span class="ct-slot-name">Wisconsin</span></div><div class="ct-slot-team"><span class="ct-slot-seed">12</span><span class="ct-slot-name">High Point</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Arkansas" data-t2="Hawaii" data-info="Thu 4:25 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">4</span><span class="ct-slot-name">Arkansas</span></div><div class="ct-slot-team"><span class="ct-slot-seed">13</span><span class="ct-slot-name">Hawaii</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Brigham Young" data-t2="Southern Methodist" data-info="Fri 7:25 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">6</span><span class="ct-slot-name">BYU</span></div><div class="ct-slot-team"><span class="ct-slot-seed">11</span><span class="ct-slot-name">SMU/MIA</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Gonzaga" data-t2="Kennesaw State" data-info="Fri 10:00 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">3</span><span class="ct-slot-name">Gonzaga</span></div><div class="ct-slot-team"><span class="ct-slot-seed">14</span><span class="ct-slot-name">Kennesaw St</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Miami (FL)" data-t2="Missouri" data-info="Fri 10:10 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">7</span><span class="ct-slot-name">Miami (FL)</span></div><div class="ct-slot-team"><span class="ct-slot-seed">10</span><span class="ct-slot-name">Missouri</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Purdue" data-t2="Queens (NC)" data-info="Fri 7:35 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">2</span><span class="ct-slot-name">Purdue</span></div><div class="ct-slot-team"><span class="ct-slot-seed">15</span><span class="ct-slot-name">Queens (NC)</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">2nd Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">1/16</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">8/9</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">5/12</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">4/13</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">6/11</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">3/14</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">7/10</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">2/15</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Sweet 16</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Elite 8</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+            </div></div>
+
+            <!-- MIDWEST -->
+            <div>
+            <div class="ob-region-label">Midwest</div>
+            <div class="ob-region-sub">Indianapolis, IN</div>
+            <div class="ct-bracket">
+                <div class="ct-round"><div class="ct-round-label">1st Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Michigan" data-t2="Maryland-Baltimore County" data-info="Thu 7:10 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">1</span><span class="ct-slot-name">Michigan</span></div><div class="ct-slot-team"><span class="ct-slot-seed">16</span><span class="ct-slot-name">UMBC/HOW</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Georgia" data-t2="Saint Louis" data-info="Thu 9:45 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">8</span><span class="ct-slot-name">Georgia</span></div><div class="ct-slot-team"><span class="ct-slot-seed">9</span><span class="ct-slot-name">Saint Louis</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Texas Tech" data-t2="Akron" data-info="Fri 12:40 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">5</span><span class="ct-slot-name">Texas Tech</span></div><div class="ct-slot-team"><span class="ct-slot-seed">12</span><span class="ct-slot-name">Akron</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Alabama" data-t2="Hofstra" data-info="Fri 3:15 PM &middot; truTV"><div class="ct-slot-team"><span class="ct-slot-seed">4</span><span class="ct-slot-name">Alabama</span></div><div class="ct-slot-team"><span class="ct-slot-seed">13</span><span class="ct-slot-name">Hofstra</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Tennessee" data-t2="NC State" data-info="Fri 4:25 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">6</span><span class="ct-slot-name">Tennessee</span></div><div class="ct-slot-team"><span class="ct-slot-seed">11</span><span class="ct-slot-name">NCST/TEX</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Virginia" data-t2="Wright State" data-info="Fri 1:50 PM &middot; TBS"><div class="ct-slot-team"><span class="ct-slot-seed">3</span><span class="ct-slot-name">Virginia</span></div><div class="ct-slot-team"><span class="ct-slot-seed">14</span><span class="ct-slot-name">Wright State</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Kentucky" data-t2="Santa Clara" data-info="Fri 12:15 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">7</span><span class="ct-slot-name">Kentucky</span></div><div class="ct-slot-team"><span class="ct-slot-seed">10</span><span class="ct-slot-name">Santa Clara</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ob-game" data-t1="Iowa State" data-t2="Tennessee State" data-info="Fri 2:50 PM &middot; CBS"><div class="ct-slot-team"><span class="ct-slot-seed">2</span><span class="ct-slot-name">Iowa State</span></div><div class="ct-slot-team"><span class="ct-slot-seed">15</span><span class="ct-slot-name">Tenn. State</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">2nd Round</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">1/16</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">8/9</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">5/12</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">4/13</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">6/11</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">3/14</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">7/10</span></div><div class="ct-slot-team"><span class="ct-slot-seed"></span><span class="ct-slot-name ct-slot-tbd">2/15</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Sweet 16</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+                <div class="ct-connectors"><div class="ct-connector"><div class="ct-conn-top"></div><div class="ct-conn-bot"></div></div></div>
+                <div class="ct-conn-out"><div class="ct-conn-line"></div></div>
+                <div class="ct-round"><div class="ct-round-label">Elite 8</div><div class="ct-round-games">
+                    <div class="ct-matchup"><div class="ct-slot ct-slot-projected"><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div><div class="ct-slot-team"><span class="ct-slot-name ct-slot-tbd">TBD</span></div></div></div>
+                </div></div>
+            </div></div>
+
+            </div><!-- /ob-wing right -->
+
+            </div></div><!-- /ob-full /ob-wrap -->
 
             <h2>Prediction vs Official</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
@@ -4937,9 +5124,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         var cache={{}};
         var loaded=false;
         var currentDate=null;
-        var currentFilter='all';
+        var currentFilter='ncaat';
         var currentSort='watchability';
         var POWER_CONFS=['ACC','Big 12','Big East','Big Ten','SEC'];
+        var ncaaSeeds=window.__SEED_LIST__||{{}};
 
         /* Build ESPN ID lookup + conference list */
         var byEspn={{}};
@@ -4996,6 +5184,9 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         function filterGames(games){{
             if(currentFilter==='all')return games;
             return games.filter(function(g){{
+                if(currentFilter==='ncaat'){{
+                    return (g.awayTeam&&ncaaSeeds[g.awayTeam.name])||(g.homeTeam&&ncaaSeeds[g.homeTeam.name]);
+                }}
                 if(currentFilter==='top25'){{
                     return (g.awayTeam&&g.awayTeam.net<=25)||(g.homeTeam&&g.homeTeam.net<=25);
                 }}
@@ -5009,6 +5200,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function buildFilterSelect(){{
             var s='<select class="sched-filter" id="sched-filter">';
+            s+='<option value="ncaat"'+(currentFilter==='ncaat'?' selected':'')+'>NCAA Tournament</option>';
             s+='<option value="all"'+(currentFilter==='all'?' selected':'')+'>All Games</option>';
             s+='<option value="top25"'+(currentFilter==='top25'?' selected':'')+'>Top 25</option>';
             s+='<option value="power"'+(currentFilter==='power'?' selected':'')+'>Power Conferences</option>';
@@ -7996,6 +8188,53 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         simBtn.addEventListener('click',function(){{
             try{{ runSim(); }}catch(e){{ simStatus.textContent='Error: '+e.message; simBtn.disabled=false; console.error(e); }}
+        }});
+    }})();
+    </script>
+    <script>
+    /* Official bracket predictions */
+    (function(){{
+        var teams=window.__SCORES_TEAMS__;
+        if(!teams)return;
+        var byName={{}};
+        teams.forEach(function(t){{if(t.name)byName[t.name]=t;}});
+        var AVG_EFF=97.5,AVG_TEMPO=67.5;
+        function predict(a,b){{
+            var poss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=((a.oe||AVG_EFF)+(b.de||AVG_EFF)-AVG_EFF)*poss/100;
+            var rawB=((b.oe||AVG_EFF)+(a.de||AVG_EFF)-AVG_EFF)*poss/100;
+            var spread=rawA-rawB;
+            var baseTotal=2*AVG_EFF*poss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
+            var ptsA=Math.round(total/2+spread/2);
+            var ptsB=Math.round(total/2-spread/2);
+            if(ptsA===ptsB){{if(spread>=0)ptsA+=1;else ptsB+=1;}}
+            var winA=1/(1+Math.pow(10,-spread/13));
+            return {{ptsA:ptsA,ptsB:ptsB,spread:spread,winA:winA}};
+        }}
+        document.querySelectorAll('.ob-game').forEach(function(el){{
+            var n1=el.getAttribute('data-t1');
+            var n2=el.getAttribute('data-t2');
+            var info=el.getAttribute('data-info');
+            var a=byName[n1],b=byName[n2];
+            /* Show game info (day/location) */
+            if(info){{
+                var infoEl=document.createElement('div');
+                infoEl.className='ct-slot-status';
+                infoEl.innerHTML=info;
+                el.appendChild(infoEl);
+            }}
+            if(!a||!b)return;
+            var p=predict(a,b);
+            var diff=Math.abs(p.spread).toFixed(1);
+            var favName=p.spread>=0?n1:n2;
+            var short=favName.replace(/ \(.*\)/,'').replace(/^Saint /,'St. ').replace(/^North /,'N. ').replace(/^South /,'S. ');
+            if(short.length>12)short=short.substring(0,11)+'.';
+            var pct=Math.round(Math.max(p.winA,1-p.winA)*100);
+            var pred=document.createElement('div');
+            pred.className='ct-slot-pred';
+            pred.textContent=p.ptsA+'-'+p.ptsB+' | '+short+' -'+diff;
+            el.appendChild(pred);
         }});
     }})();
     </script>
