@@ -7943,16 +7943,48 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
     </script>
     <script>
-    /* Official bracket — inject tip times */
+    /* Official bracket — inject tip times + predictions */
     (function(){{
+        var teams=window.__SCORES_TEAMS__;
+        if(!teams)return;
+        var byName={{}};
+        teams.forEach(function(t){{if(t.name)byName[t.name]=t;}});
+        var AVG_EFF=97.5,AVG_TEMPO=67.5;
+        function predict(a,b){{
+            var poss=(a.pace&&b.pace)?(a.pace*b.pace)/AVG_TEMPO:AVG_TEMPO;
+            var rawA=((a.oe||AVG_EFF)+(b.de||AVG_EFF)-AVG_EFF)*poss/100;
+            var rawB=((b.oe||AVG_EFF)+(a.de||AVG_EFF)-AVG_EFF)*poss/100;
+            var spread=rawA-rawB;
+            var baseTotal=2*AVG_EFF*poss/100;
+            var total=baseTotal+(rawA+rawB-baseTotal)*0.33;
+            var ptsA=Math.round(total/2+spread/2);
+            var ptsB=Math.round(total/2-spread/2);
+            if(ptsA===ptsB){{if(spread>=0)ptsA+=1;else ptsB+=1;}}
+            var winA=1/(1+Math.pow(10,-spread/13));
+            return {{ptsA:ptsA,ptsB:ptsB,spread:spread,winA:winA}};
+        }}
         document.querySelectorAll('.ob-game').forEach(function(el){{
+            var n1=el.getAttribute('data-t1');
+            var n2=el.getAttribute('data-t2');
             var info=el.getAttribute('data-info');
+            var a=byName[n1],b=byName[n2];
             if(info){{
                 var d=document.createElement('div');
                 d.className='ct-slot-status';
                 d.innerHTML=info;
                 el.appendChild(d);
             }}
+            if(!a||!b)return;
+            var p=predict(a,b);
+            var diff=Math.abs(p.spread).toFixed(1);
+            var favName=p.spread>=0?n1:n2;
+            var short=favName.replace(/ \(.*\)/,'').replace(/^Saint /,'St. ').replace(/^North /,'N. ').replace(/^South /,'S. ');
+            if(short.length>12)short=short.substring(0,11)+'.';
+            var pct=Math.round(Math.max(p.winA,1-p.winA)*100);
+            var pred=document.createElement('div');
+            pred.className='ct-slot-pred';
+            pred.textContent=p.ptsA+'-'+p.ptsB+' | '+short+' -'+diff;
+            el.appendChild(pred);
         }});
     }})();
     </script>
