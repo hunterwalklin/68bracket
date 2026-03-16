@@ -2243,6 +2243,88 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             margin-bottom: 0.5rem;
         }}
 
+        /* Official bracket matchup cards */
+        .official-regions {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }}
+        .official-region {{
+            background: var(--surface);
+            border-radius: 10px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+        }}
+        .official-region h3 {{
+            color: var(--accent);
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin: 0 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent);
+        }}
+        .matchup-card {{
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }}
+        .matchup-team {{
+            display: flex;
+            align-items: center;
+            padding: 0.45rem 0.7rem;
+            font-size: 0.84rem;
+            gap: 0.5rem;
+            background: var(--bg);
+        }}
+        .matchup-team + .matchup-team {{
+            border-top: 1px solid var(--border);
+        }}
+        .matchup-seed {{
+            font-weight: 700;
+            color: var(--accent);
+            min-width: 1.5rem;
+            text-align: center;
+            font-size: 0.78rem;
+        }}
+        .matchup-name {{
+            flex: 1;
+        }}
+        .matchup-divider {{
+            height: 0.75rem;
+        }}
+        .official-ff {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.75rem;
+            margin: 1rem 0 1.5rem 0;
+        }}
+        .ff-card {{
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            padding: 0.75rem 1rem;
+            font-size: 0.84rem;
+        }}
+        .ff-card .ff-seed {{
+            font-weight: 700;
+            color: var(--accent);
+            margin-right: 0.4rem;
+        }}
+        .ff-card .ff-date {{
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            float: right;
+        }}
+        .ff-card .ff-vs {{
+            color: var(--text-muted);
+            margin: 0 0.25rem;
+        }}
+
         .bracket-region pre {{
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
             font-size: 0.7rem;
@@ -4150,159 +4232,82 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
         <div id="panel-official" class="tab-panel">
             <h2>Official 2026 NCAA Tournament Bracket</h2>
 
-            <h3>First Four</h3>
-            <ul class="first-four-list">
-                <li>(11) NC State vs Texas — Mar 17</li>
-                <li>(16) UMBC vs Howard — Mar 17</li>
-                <li>(11) SMU vs Miami (OH) — Mar 18</li>
-                <li>(16) Lehigh vs Prairie View — Mar 18</li>
-            </ul>
-
-            <h3>Regional Brackets</h3>
-            <div class="brackets-grid">
-                <div class="region-bracket">
-                    <pre class="bracket-art">
-                              EAST REGION
-
-(1) Duke ────────────────────────┐
-                                 ├──────────────┐
-(16) Siena ──────────────────────┘              │
-                                                ├──────────────┐
-(8) Ohio State ──────────────────┐              │              │
-                                 ├──────────────┘              │
-(9) TCU ─────────────────────────┘                             │
-                                                               ├── East
-(5) St. John's ──────────────────┐                             │
-                                 ├──────────────┐              │
-(12) Northern Iowa ──────────────┘              │              │
-                                                ├──────────────┘
-(4) Kansas ──────────────────────┐              │
-                                 ├──────────────┘
-(13) California Baptist ─────────┘
-
-(6) Louisville ──────────────────┐
-                                 ├──────────────┐
-(11) South Florida ──────────────┘              │
-                                                ├──────────────┐
-(3) Michigan State ──────────────┐              │              │
-                                 ├──────────────┘              │
-(14) North Dakota State ─────────┘                             │
-                                                               ├── East
-(7) UCLA ────────────────────────┐                             │
-                                 ├──────────────┐              │
-(10) UCF ────────────────────────┘              │              │
-                                                ├──────────────┘
-(2) UConn ───────────────────────┐              │
-                                 ├──────────────┘
-(15) Furman ─────────────────────┘</pre>
+            <h3>First Four — Dayton, OH</h3>
+            <div class="official-ff">
+                <div class="ff-card">
+                    <span class="ff-date">Mar 17</span>
+                    <span class="ff-seed">(11)</span> NC State <span class="ff-vs">vs</span> Texas
                 </div>
-                <div class="region-bracket">
-                    <pre class="bracket-art">
-                              WEST REGION
-
-(1) Arizona ─────────────────┐
-                             ├──────────────┐
-(16) Long Island University ─┘              │
-                                            ├──────────────┐
-(8) Villanova ───────────────┐              │              │
-                             ├──────────────┘              │
-(9) Utah State ──────────────┘                             │
-                                                           ├── West
-(5) Wisconsin ───────────────┐                             │
-                             ├──────────────┐              │
-(12) High Point ─────────────┘              │              │
-                                            ├──────────────┘
-(4) Arkansas ────────────────┐              │
-                             ├──────────────┘
-(13) Hawaii ─────────────────┘
-
-(6) BYU ─────────────────────┐
-                             ├──────────────┐
-(11) SMU/Miami (OH) ─────────┘              │
-                                            ├──────────────┐
-(3) Gonzaga ─────────────────┐              │              │
-                             ├──────────────┘              │
-(14) Kennesaw State ─────────┘                             │
-                                                           ├── West
-(7) Miami (FL) ──────────────┐                             │
-                             ├──────────────┐              │
-(10) Missouri ───────────────┘              │              │
-                                            ├──────────────┘
-(2) Purdue ──────────────────┐              │
-                             ├──────────────┘
-(15) Queens (NC) ────────────┘</pre>
+                <div class="ff-card">
+                    <span class="ff-date">Mar 17</span>
+                    <span class="ff-seed">(16)</span> UMBC <span class="ff-vs">vs</span> Howard
                 </div>
-                <div class="region-bracket">
-                    <pre class="bracket-art">
-                              SOUTH REGION
-
-(1) Florida ─────────────────────┐
-                                 ├──────────────┐
-(16) Lehigh/Prairie View ────────┘              │
-                                                ├──────────────┐
-(8) Clemson ─────────────────────┐              │              │
-                                 ├──────────────┘              │
-(9) Iowa ────────────────────────┘                             │
-                                                               ├── South
-(5) Vanderbilt ──────────────────┐                             │
-                                 ├──────────────┐              │
-(12) McNeese State ──────────────┘              │              │
-                                                ├──────────────┘
-(4) Nebraska ────────────────────┐              │
-                                 ├──────────────┘
-(13) Troy ───────────────────────┘
-
-(6) North Carolina ──────────────┐
-                                 ├──────────────┐
-(11) VCU ────────────────────────┘              │
-                                                ├──────────────┐
-(3) Illinois ────────────────────┐              │              │
-                                 ├──────────────┘              │
-(14) Pennsylvania ───────────────┘                             │
-                                                               ├── South
-(7) Saint Mary's ────────────────┐                             │
-                                 ├──────────────┐              │
-(10) Texas A&M ──────────────────┘              │              │
-                                                ├──────────────┘
-(2) Houston ─────────────────────┐              │
-                                 ├──────────────┘
-(15) Idaho ──────────────────────┘</pre>
+                <div class="ff-card">
+                    <span class="ff-date">Mar 18</span>
+                    <span class="ff-seed">(11)</span> SMU <span class="ff-vs">vs</span> Miami (OH)
                 </div>
-                <div class="region-bracket">
-                    <pre class="bracket-art">
-                            MIDWEST REGION
+                <div class="ff-card">
+                    <span class="ff-date">Mar 18</span>
+                    <span class="ff-seed">(16)</span> Lehigh <span class="ff-vs">vs</span> Prairie View
+                </div>
+            </div>
 
-(1) Michigan ────────────────┐
-                             ├──────────────┐
-(16) UMBC/Howard ────────────┘              │
-                                            ├──────────────┐
-(8) Georgia ─────────────────┐              │              │
-                             ├──────────────┘              │
-(9) Saint Louis ─────────────┘                             │
-                                                           ├── Midwest
-(5) Texas Tech ──────────────┐                             │
-                             ├──────────────┐              │
-(12) Akron ──────────────────┘              │              │
-                                            ├──────────────┘
-(4) Alabama ─────────────────┐              │
-                             ├──────────────┘
-(13) Hofstra ────────────────┘
-
-(6) Tennessee ───────────────┐
-                             ├──────────────┐
-(11) NC State/Texas ─────────┘              │
-                                            ├──────────────┐
-(3) Virginia ────────────────┐              │              │
-                             ├──────────────┘              │
-(14) Wright State ───────────┘                             │
-                                                           ├── Midwest
-(7) Kentucky ────────────────┐                             │
-                             ├──────────────┐              │
-(10) Santa Clara ────────────┘              │              │
-                                            ├──────────────┘
-(2) Iowa State ──────────────┐              │
-                             ├──────────────┘
-(15) Tennessee State ────────┘</pre>
+            <div class="official-regions">
+                <div class="official-region">
+                    <h3>East</h3>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Duke</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Siena</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Ohio State</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">TCU</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">St. John's</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">Northern Iowa</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Kansas</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">California Baptist</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">Louisville</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">South Florida</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Michigan State</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">North Dakota State</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">UCLA</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">UCF</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">UConn</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Furman</span></div></div>
+                </div>
+                <div class="official-region">
+                    <h3>West</h3>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Arizona</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Long Island</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Villanova</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Utah State</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Wisconsin</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">High Point</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Arkansas</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Hawaii</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">BYU</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">SMU / Miami (OH)</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Gonzaga</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Kennesaw State</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Miami (FL)</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Missouri</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Purdue</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Queens (NC)</span></div></div>
+                </div>
+                <div class="official-region">
+                    <h3>South</h3>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Florida</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">Lehigh / Prairie View</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Clemson</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Iowa</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Vanderbilt</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">McNeese State</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Nebraska</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Troy</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">North Carolina</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">VCU</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Illinois</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Pennsylvania</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Saint Mary's</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Texas A&M</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Houston</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Idaho</span></div></div>
+                </div>
+                <div class="official-region">
+                    <h3>Midwest</h3>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">1</span><span class="matchup-name">Michigan</span></div><div class="matchup-team"><span class="matchup-seed">16</span><span class="matchup-name">UMBC / Howard</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">8</span><span class="matchup-name">Georgia</span></div><div class="matchup-team"><span class="matchup-seed">9</span><span class="matchup-name">Saint Louis</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">5</span><span class="matchup-name">Texas Tech</span></div><div class="matchup-team"><span class="matchup-seed">12</span><span class="matchup-name">Akron</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">4</span><span class="matchup-name">Alabama</span></div><div class="matchup-team"><span class="matchup-seed">13</span><span class="matchup-name">Hofstra</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">6</span><span class="matchup-name">Tennessee</span></div><div class="matchup-team"><span class="matchup-seed">11</span><span class="matchup-name">NC State / Texas</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">3</span><span class="matchup-name">Virginia</span></div><div class="matchup-team"><span class="matchup-seed">14</span><span class="matchup-name">Wright State</span></div></div>
+                    <div class="matchup-divider"></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">7</span><span class="matchup-name">Kentucky</span></div><div class="matchup-team"><span class="matchup-seed">10</span><span class="matchup-name">Santa Clara</span></div></div>
+                    <div class="matchup-card"><div class="matchup-team"><span class="matchup-seed">2</span><span class="matchup-name">Iowa State</span></div><div class="matchup-team"><span class="matchup-seed">15</span><span class="matchup-name">Tennessee State</span></div></div>
                 </div>
             </div>
 
