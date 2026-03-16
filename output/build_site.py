@@ -4305,6 +4305,57 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 (15) Tennessee State ────────┘</pre>
                 </div>
             </div>
+
+            <h2>Prediction vs Official</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                How the 68bracket model prediction compared to the actual Selection Sunday bracket.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">68/68</div>
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">Field Correct</div>
+                </div>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">4/4</div>
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">1 Seeds Correct</div>
+                </div>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">63%</div>
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">Exact Seed Match</div>
+                </div>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">96%</div>
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">Within 1 Seed</div>
+                </div>
+            </div>
+
+            <table class="seed-table" style="font-size: 0.88rem;">
+                <thead>
+                    <tr><th>Seed</th><th>Predicted</th><th>Official</th><th>Result</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>Michigan, Duke, Arizona, Florida</td><td>Duke, Arizona, Florida, Michigan</td><td style="color: #22c55e;">4/4</td></tr>
+                    <tr><td>2</td><td>Houston, UConn, Gonzaga, Michigan St</td><td>UConn, Purdue, Houston, Iowa State</td><td>2/4</td></tr>
+                    <tr><td>3</td><td>Purdue, Iowa State, Vanderbilt, Virginia</td><td>Michigan St, Gonzaga, Illinois, Virginia</td><td>1/4</td></tr>
+                    <tr><td>4</td><td>Nebraska, Illinois, Alabama, Arkansas</td><td>Kansas, Arkansas, Nebraska, Alabama</td><td style="color: #22c55e;">3/4</td></tr>
+                    <tr><td>5</td><td>St. John's, Kansas, Texas Tech, Louisville</td><td>St. John's, Wisconsin, Vanderbilt, Texas Tech</td><td>2/4</td></tr>
+                    <tr><td>6</td><td>Wisconsin, Tennessee, North Carolina, BYU</td><td>Louisville, BYU, North Carolina, Tennessee</td><td style="color: #22c55e;">3/4</td></tr>
+                    <tr><td>7</td><td>Miami (FL), Kentucky, Clemson, Utah State</td><td>UCLA, Miami (FL), Saint Mary's, Kentucky</td><td>2/4</td></tr>
+                    <tr><td>8</td><td>Saint Mary's, UCLA, Georgia, Villanova</td><td>Ohio State, Villanova, Clemson, Georgia</td><td>2/4</td></tr>
+                    <tr><td>9</td><td>Ohio State, NC State, TCU, Texas A&M</td><td>TCU, Utah State, Iowa, Saint Louis</td><td>1/4</td></tr>
+                    <tr><td>10</td><td>Saint Louis, Iowa, Texas, UCF</td><td>UCF, Missouri, Texas A&M, Santa Clara</td><td>1/4</td></tr>
+                    <tr><td>11</td><td>VCU, S. Florida + FF: SMU, Missouri, Santa Clara, Miami (OH)</td><td>S. Florida, VCU + FF: SMU/Miami (OH), NC State/Texas</td><td style="color: #22c55e;">4/6</td></tr>
+                    <tr><td>12</td><td>Akron, McNeese, High Point, Northern Iowa</td><td>Northern Iowa, High Point, McNeese, Akron</td><td style="color: #22c55e;">4/4</td></tr>
+                    <tr><td>13</td><td>CA Baptist, Hofstra, Hawaii, N. Dakota St</td><td>CA Baptist, Hawaii, Troy, Hofstra</td><td style="color: #22c55e;">3/4</td></tr>
+                    <tr><td>14</td><td>Troy, Wright State, Pennsylvania, Kennesaw St</td><td>N. Dakota St, Kennesaw St, Pennsylvania, Wright State</td><td style="color: #22c55e;">3/4</td></tr>
+                    <tr><td>15</td><td>Idaho, Queens, LIU, Tennessee State</td><td>Furman, Queens, Idaho, Tennessee State</td><td style="color: #22c55e;">3/4</td></tr>
+                    <tr><td>16</td><td>UMBC, Furman + FF: Siena, Howard, Lehigh, Prairie View</td><td>Siena, LIU + FF: Lehigh/Prairie View, UMBC/Howard</td><td style="color: #22c55e;">5/6</td></tr>
+                </tbody>
+            </table>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.5rem;">
+                43/68 exact seed matches. Maximum miss was 2 seed lines (Vanderbilt, NC State, Utah State). Every team within 2 seeds of actual placement.
+            </p>
         </div>
 
         <div id="panel-bracket" class="tab-panel">
