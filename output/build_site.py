@@ -7108,7 +7108,21 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     /* Build stakes description */
                     var stakes=[];
                     if(seeds[g.awayName]&&seeds[g.homeName]){{
-                        stakes.push('Win or go home.');
+                        var sA=seeds[g.awayName],sB=seeds[g.homeName];
+                        var hi=Math.max(sA,sB),lo=Math.min(sA,sB);
+                        var hiName=sA>sB?g.awayName:g.homeName;
+                        var loName=sA>sB?g.homeName:g.awayName;
+                        if(lo<=2&&hi>=7) stakes.push('Classic upset territory \u2014 '+hiName+' has nothing to lose.');
+                        else if(lo<=2&&hi<=2) stakes.push('Heavyweight matchup between two top seeds.');
+                        else if(Math.abs(sA-sB)<=2&&lo<=4) stakes.push('Toss-up on paper \u2014 a coin-flip game between evenly seeded teams.');
+                        else if(hi>=10&&spreadAbs<5) stakes.push(hiName+' is live here \u2014 the numbers say this is closer than the seeds suggest.');
+                        else if(spreadAbs>=15) stakes.push(favName+' should roll, but March has a way of humbling favorites.');
+                        if(awayTeam&&homeTeam){{
+                            var fast=awayTeam.pace&&homeTeam.pace&&(awayTeam.pace+homeTeam.pace)/2>69;
+                            var slow=awayTeam.pace&&homeTeam.pace&&(awayTeam.pace+homeTeam.pace)/2<64;
+                            if(fast) stakes.push('Both teams push tempo \u2014 expect a high-possession game.');
+                            else if(slow) stakes.push('A grind-it-out pace \u2014 every possession matters.');
+                        }}
                     }}
 
                     html+='<div class="summary-preview-card">'
@@ -7176,7 +7190,21 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
                     var stakes=[];
                     if(seeds[g.awayName]&&seeds[g.homeName]){{
-                        stakes.push('Win or go home.');
+                        var sA=seeds[g.awayName],sB=seeds[g.homeName];
+                        var hi=Math.max(sA,sB),lo=Math.min(sA,sB);
+                        var hiName=sA>sB?g.awayName:g.homeName;
+                        var loName=sA>sB?g.homeName:g.awayName;
+                        if(lo<=2&&hi>=7) stakes.push('Classic upset territory \u2014 '+hiName+' has nothing to lose.');
+                        else if(lo<=2&&hi<=2) stakes.push('Heavyweight matchup between two top seeds.');
+                        else if(Math.abs(sA-sB)<=2&&lo<=4) stakes.push('Toss-up on paper \u2014 a coin-flip game between evenly seeded teams.');
+                        else if(hi>=10&&spreadAbs<5) stakes.push(hiName+' is live here \u2014 the numbers say this is closer than the seeds suggest.');
+                        else if(spreadAbs>=15) stakes.push(favName+' should roll, but March has a way of humbling favorites.');
+                        if(g.awayTeam&&g.homeTeam){{
+                            var fast=g.awayTeam.pace&&g.homeTeam.pace&&(g.awayTeam.pace+g.homeTeam.pace)/2>69;
+                            var slow=g.awayTeam.pace&&g.homeTeam.pace&&(g.awayTeam.pace+g.homeTeam.pace)/2<64;
+                            if(fast) stakes.push('Both teams push tempo \u2014 expect a high-possession game.');
+                            else if(slow) stakes.push('A grind-it-out pace \u2014 every possession matters.');
+                        }}
                     }}
 
                     html+='<div class="summary-preview-card">'
