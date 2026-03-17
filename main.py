@@ -436,6 +436,15 @@ def cmd_predict(args):
     build_site(changes=changes, stats_df=all_with_probs, bubble=bubble, model_type=model_type)
 
 
+def cmd_site(args):
+    """Rebuild the site HTML from cached data (no model re-run)."""
+    model_type = getattr(args, "model", "rf")
+    from output.build_site import build as build_site
+    print("Rebuilding site from cached data...")
+    build_site(model_type=model_type)
+    print("Done.")
+
+
 def cmd_all(args):
     """Run the full pipeline: scrape, build, train, evaluate, predict."""
     model_type = getattr(args, "model", "rf")
@@ -522,6 +531,11 @@ Commands:
     pred_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
                              help="Model type (default: rf)")
 
+    # Site (rebuild HTML only)
+    site_parser = subparsers.add_parser("site", help="Rebuild site HTML from cached data (no model re-run)")
+    site_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
+                             help="Model type (default: rf)")
+
     # All
     all_parser = subparsers.add_parser("all", help="Run the full pipeline")
     all_parser.add_argument("--model", choices=MODEL_CHOICES, default="rf",
@@ -539,6 +553,7 @@ Commands:
         "train": cmd_train,
         "evaluate": cmd_evaluate,
         "predict": cmd_predict,
+        "site": cmd_site,
         "all": cmd_all,
     }
 

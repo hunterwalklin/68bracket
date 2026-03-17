@@ -4,7 +4,16 @@ on:
   # schedule:
   #   # Run daily at 15:00 UTC (10:00 AM Eastern / 9:00 AM Central)
   #   - cron: "0 15 * * *"
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - site-only
 
 permissions:
   contents: read
@@ -44,6 +53,7 @@ jobs:
       # First run (no cache): full scrape of all seasons.
       # Subsequent runs: only re-scrape the current season.
       - name: Scrape data
+        if: inputs.mode != 'site-only'
         run: |
           if [ -f data/processed/team_stats.parquet ]; then
             echo "Cache hit — running current-only refresh"
@@ -54,15 +64,24 @@ jobs:
           fi
 
       - name: Build features
+        if: inputs.mode != 'site-only'
         run: python -m main build
 
       - name: Train models
+        if: inputs.mode != 'site-only'
         run: python -m main train --model full_ensemble
 
       - name: Generate predictions and build site
+        if: inputs.mode != 'site-only'
         env:
           CHAT_API_URL: https://68bracket-chat.hunter-walklin.workers.dev
         run: python -m main predict --model full_ensemble
+
+      - name: Rebuild site only (no model re-run)
+        if: inputs.mode == 'site-only'
+        env:
+          CHAT_API_URL: https://68bracket-chat.hunter-walklin.workers.dev
+        run: python -m main site --model full_ensemble
 
       # - name: Post to Bluesky
       #   env:

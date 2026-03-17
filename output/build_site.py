@@ -6861,8 +6861,6 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
         function ctx(name){{
             if(seeds[name])return ' <span class="summary-ctx">('+seeds[name]+'-seed)</span>';
-            var bk=bubbleTeams[name];
-            if(bk)return ' <span class="summary-ctx">('+bubbleLabels[bk]+')</span>';
             var t=byName[name];
             if(t&&t.net<=60)return ' <span class="summary-ctx">(NET '+t.net+')</span>';
             return '';
@@ -6917,7 +6915,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     return (a.ns||99)-(b.ns||99);
                 }});
 
-                html+='<div class="summary-sub-header">Bracket Movers</div>';
+                html+='<div class="summary-sub-header">Seed Changes</div>';
 
                 /* Chip strip */
                 html+='<div class="summary-movers">';
@@ -6947,11 +6945,11 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     if(!game){{
                         /* Moved without playing — other results shifted them */
                         if(c.prev===null){{
-                            html+='<p>'+ref(c.name,t)+' enters the projected field as a new <strong>'+c.ns+'-seed</strong>.</p>';
+                            html+='<p>'+ref(c.name,t)+' is now a <strong>'+c.ns+'-seed</strong>.</p>';
                         }}else if(c.dir==='up'){{
-                            html+='<p>'+ref(c.name,t)+' moves up from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> without playing — other results shifted the field in their favor.</p>';
+                            html+='<p>'+ref(c.name,t)+' moves up from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong>.</p>';
                         }}else{{
-                            html+='<p>'+ref(c.name,t)+' drops from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> despite not playing — other results pushed them down.</p>';
+                            html+='<p>'+ref(c.name,t)+' drops from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong>.</p>';
                         }}
                         return;
                     }}
@@ -6965,17 +6963,12 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     var score=game.awayScore>game.homeScore?game.awayScore+'-'+game.homeScore:game.homeScore+'-'+game.awayScore;
                     var venue=venueWord(game,c.name);
 
-                    if(c.prev===null){{
-                        html+='<p>'+ref(c.name,t)+' enters the projected field as a new <strong>'+c.ns+'-seed</strong> after '
-                            +(won?'a '+score+' win over':'falling to')+' '+ref(oppName,oppTeam)+ctx(oppName)+venue+'.</p>';
-                    }}else if(c.dir==='up'){{
-                        html+='<p>'+ref(c.name,t)+' climbed from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> after '
-                            +(won?winVerb(margin)+'ing':('a '+score+' loss to'))+' '+ref(oppName,oppTeam)+ctx(oppName)
-                            +(won?', '+score+venue:venue)+'.</p>';
+                    if(won){{
+                        html+='<p>'+ref(c.name,t)+' advances after '+winVerb(margin)+'ing '
+                            +ref(oppName,oppTeam)+ctx(oppName)+', '+score+venue+'.</p>';
                     }}else{{
-                        html+='<p>'+ref(c.name,t)+' dropped from a '+c.prev+' to a <strong>'+c.ns+'-seed</strong> after '
-                            +(won?'a narrow '+score+' win over':'falling to')+' '+ref(oppName,oppTeam)+ctx(oppName)
-                            +(won?venue:', '+score+venue)+'.</p>';
+                        html+='<p>'+ref(c.name,t)+' has been eliminated after falling to '
+                            +ref(oppName,oppTeam)+ctx(oppName)+', '+score+venue+'.</p>';
                     }}
                 }});
             }}
@@ -7020,48 +7013,20 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     html+='<p>'+ref(winName,winTeam)+ctx(winName)+' knocked off '
                         +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue
                         +'. <span class="summary-impact">'
-                        +(loseTeam?'The '+loseName+' loss is a hit to their seed — '+(seeds[loseName]?'currently a '+seeds[loseName]+'-seed.':'watch for movement.'):'')
+                        +(seeds[loseName]?loseName+' ('+seeds[loseName]+'-seed) is eliminated.':'')
                         +'</span></p>';
                 }});
             }}
 
-            /* Bubble results */
+            /* Other tournament results */
             if(bubbleGames.length>0){{
-                html+='<div class="summary-sub-header">Bubble Watch</div>';
-                bubbleGames.forEach(function(g){{
-                    var awayWon=g.awayScore>g.homeScore;
-                    var winName=awayWon?g.awayName:g.homeName;
-                    var loseName=awayWon?g.homeName:g.awayName;
-                    var winTeam=byName[winName];
-                    var loseTeam=byName[loseName];
-                    var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
-                    var venue=venueWord(g,winName);
-
-                    var winBub=bubbleTeams[winName];
-                    var loseBub=bubbleTeams[loseName];
-
-                    if(winBub){{
-                        var label=bubbleLabels[winBub];
-                        var oppCtx=ctx(loseName);
-                        html+='<p>'+ref(winName,winTeam)+' <span class="summary-ctx">('+label+')</span> picked up a '
-                            +(loseTeam&&loseTeam.net<=50?'quality ':'')+'win over '+ref(loseName,loseTeam)+oppCtx
-                            +', '+score+venue+'. <span class="summary-impact">'
-                            +(winBub==='first_4_out'||winBub==='next_4_out'?'A much-needed result for their at-large case.':'A resume-builder that should help their standing.')
-                            +'</span></p>';
-                    }}else if(loseBub){{
-                        var label2=bubbleLabels[loseBub];
-                        html+='<p>'+ref(loseName,loseTeam)+' <span class="summary-ctx">('+label2+')</span> took a tough loss to '
-                            +ref(winName,winTeam)+ctx(winName)+', '+score
-                            +'. <span class="summary-impact">'
-                            +(loseBub==='last_4_in'?'They could be in danger of slipping out of the field.':'That makes their path to an at-large bid even steeper.')
-                            +'</span></p>';
-                    }}
-                }});
+                bubbleGames.forEach(function(g){{bracketGames.push(g);}});
+                bubbleGames=[];
             }}
 
             /* Other bracket results */
             if(bracketGames.length>0){{
-                html+='<div class="summary-sub-header">Around the Bracket</div>';
+                html+='<div class="summary-sub-header">Tournament Results</div>';
                 /* Sort by winner seed (most important first) */
                 bracketGames.sort(function(a,b){{
                     var awA=a.awayScore>a.homeScore?a.awayName:a.homeName;
@@ -7077,13 +7042,14 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     var margin=Math.abs(g.awayScore-g.homeScore);
                     var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
                     var venue=venueWord(g,winName);
+                    var elim=(seeds[winName]&&seeds[loseName])?' <span class="summary-impact">'+loseName+' is eliminated.</span>':'';
                     html+='<p>'+ref(winName,winTeam)+ctx(winName)+' '+winVerb(margin)+' '
-                        +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue+'.</p>';
+                        +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue+'.'+elim+'</p>';
                 }});
             }}
 
             if(completed.length===0||relevantGames.length===0&&changesArr.length===0){{
-                html+='<p class="summary-empty">No games of note yesterday.</p>';
+                html+='<p class="summary-empty">No tournament games yesterday.</p>';
             }}
 
             html+='</div>';
@@ -7119,7 +7085,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     if(g.pred){{
                         var favName=g.pred.spread>=0?g.awayName:g.homeName;
                         var pct=(Math.max(g.pred.winA,1-g.pred.winA)*100).toFixed(0);
-                        html+=' <span class="summary-impact">Pre-game pick: '+favName+' '+pct+'%.</span>';
+                        html+=' <span class="summary-impact">Pregame: '+favName+' '+pct+'%.</span>';
                     }}
                     html+='</p>';
                 }});
@@ -7142,21 +7108,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     /* Build stakes description */
                     var stakes=[];
                     if(seeds[g.awayName]&&seeds[g.homeName]){{
-                        stakes.push('A matchup between two projected tournament teams.');
-                    }}
-                    if(isBubble(g.awayName)){{
-                        var bl=bubbleLabels[bubbleTeams[g.awayName]];
-                        stakes.push(g.awayName+' ('+bl+') '+(seeds[g.homeName]?'has a chance at a signature win.':'needs this one.'));
-                    }}
-                    if(isBubble(g.homeName)){{
-                        var bl2=bubbleLabels[bubbleTeams[g.homeName]];
-                        stakes.push(g.homeName+' ('+bl2+') '+(seeds[g.awayName]?'has a chance at a signature win at home.':'needs this one at home.'));
+                        stakes.push('Win or go home.');
                     }}
 
                     html+='<div class="summary-preview-card">'
                         +'<div class="summary-matchup-line">'
                             +ref(g.awayName,awayTeam)+ctx(g.awayName)
-                            +' <span class="summary-ctx">at</span> '
+                            +' <span class="summary-ctx">vs</span> '
                             +ref(g.homeName,homeTeam)+ctx(g.homeName)
                         +'</div>';
                     if(stakes.length>0){{
@@ -7182,11 +7140,10 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                     var score=Math.max(g.awayScore,g.homeScore)+'-'+Math.min(g.awayScore,g.homeScore);
                     var venue=venueWord(g,winName);
 
-                    var winBub=bubbleTeams[winName];
-                    var loseBub=bubbleTeams[loseName];
                     var impact='';
-                    if(winBub)impact=' <span class="summary-impact">Good result for the '+bubbleLabels[winBub]+'.</span>';
-                    else if(loseBub)impact=' <span class="summary-impact">Tough loss for the '+bubbleLabels[loseBub]+'.</span>';
+                    if(seeds[winName]&&seeds[loseName]){{
+                        impact=' <span class="summary-impact">'+loseName+' is eliminated.</span>';
+                    }}
 
                     html+='<p>'+ref(winName,winTeam)+ctx(winName)+' '+winVerb(margin)+' '
                         +ref(loseName,loseTeam)+ctx(loseName)+', '+score+venue+'.'+impact+'</p>';
@@ -7194,7 +7151,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
             }}
 
             if(live.length===0&&upcoming.length===0&&done.length===0){{
-                html+='<p class="summary-empty">No games of note on the schedule today.</p>';
+                html+='<p class="summary-empty">No tournament games on the schedule today.</p>';
             }}
 
             html+='</div>';
@@ -7219,21 +7176,13 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
 
                     var stakes=[];
                     if(seeds[g.awayName]&&seeds[g.homeName]){{
-                        stakes.push('A matchup between two projected tournament teams.');
-                    }}
-                    if(isBubble(g.awayName)){{
-                        var bl=bubbleLabels[bubbleTeams[g.awayName]];
-                        stakes.push(g.awayName+' ('+bl+') '+(seeds[g.homeName]?'has a chance at a signature win.':'needs this one.'));
-                    }}
-                    if(isBubble(g.homeName)){{
-                        var bl2=bubbleLabels[bubbleTeams[g.homeName]];
-                        stakes.push(g.homeName+' ('+bl2+') '+(seeds[g.awayName]?'has a chance at a signature win at home.':'needs this one at home.'));
+                        stakes.push('Win or go home.');
                     }}
 
                     html+='<div class="summary-preview-card">'
                         +'<div class="summary-matchup-line">'
                             +ref(g.awayName,g.awayTeam)+ctx(g.awayName)
-                            +' <span class="summary-ctx">at</span> '
+                            +' <span class="summary-ctx">vs</span> '
                             +ref(g.homeName,g.homeTeam)+ctx(g.homeName)
                         +'</div>';
                     if(stakes.length>0){{
@@ -7245,7 +7194,7 @@ def md_to_html(md_path: str, changes: dict | None = None, stats_html: str = "", 
                         +'</div></div>';
                 }});
             }} else {{
-                html+='<p class="summary-empty">No notable games on the schedule.</p>';
+                html+='<p class="summary-empty">No tournament games on the schedule.</p>';
             }}
 
             html+='</div>';
